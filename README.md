@@ -132,7 +132,7 @@ WHERE id = :id
 
 ---
 
-<img width="170" height="598" alt="image" src="https://github.com/user-attachments/assets/b3fd5307-21a8-4b85-aa7f-f31387edff13" />
+<img width="220" height="598" alt="image" src="https://github.com/user-attachments/assets/b3fd5307-21a8-4b85-aa7f-f31387edff13" />
 
 
 
