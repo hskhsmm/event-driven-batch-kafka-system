@@ -1,11 +1,21 @@
 spring:
   datasource:
-    # 환경 변수가 없을 경우를 대비해 : 뒤에 기본값을 적어줄 수도 있습니다.
-    url: jdbc:mysql://localhost:3306/${DB_NAME}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    # Docker Compose로 띄운 MySQL에 접속 (localhost)
+    url: jdbc:mysql://localhost:3306/${MYSQL_DATABASE}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: campaign-group
+      auto-offset-reset: earliest
