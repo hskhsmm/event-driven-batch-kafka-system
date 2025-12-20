@@ -9,7 +9,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      TZ: Asia/Seoul # 타임존 설정 (선택 사항)
+      TZ: Asia/Seoul # 타임존 설정 (선택하자)
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
