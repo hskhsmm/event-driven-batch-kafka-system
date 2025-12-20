@@ -89,10 +89,3 @@ WHERE id = :id AND remaining_quantity > 0;
 * [ ] Prometheus/Grafana를 연동하여 가상 스레드 및 Kafka 처리량 모니터링 구축
 * [ ] Kafka 장애 상황(Dead Letter Queue) 처리 로직 추가
 
----
-
-### 🚀 다음으로 무엇을 도와드릴까요?
-
-1. **이 README에 들어갈 아키텍처 구조도(Mermaid 차트 등) 작성을 도와드릴까요?**
-2. **Java 25 가상 스레드 설정 및 Kafka Producer 연동 코드를 먼저 짜볼까요?**
-3. **k6 테스트 스크립트 작성을 도와드릴까요?**
