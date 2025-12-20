@@ -8,7 +8,15 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "campaign_stats")
+@Table(
+    name = "campaign_stats",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uk_campaign_stats_date",
+            columnNames = {"campaign_id", "stats_date"}
+        )
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CampaignStats {
