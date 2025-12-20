@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    # 환경 변수가 없을 경우를 대비해 : 뒤에 기본값을 적어줄 수도 있습니다.
+    url: jdbc:mysql://localhost:3306/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true

@@ -1,0 +1,66 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.0.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'io.eventdriven'
+version = '0.0.1-SNAPSHOT'
+description = 'Event-driven first-come processing system using Kafka and Spring Batch'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// [Spring Batch] 대용량 데이터 처리 및 배치를 위한 핵심 라이브러리
+	// 역할: 선착순 종료 후 참여 이력 집계 및 통계 테이블 마이그레이션 담당
+	implementation 'org.springframework.boot:spring-boot-starter-batch'
+
+	// [Spring Data JPA] Java 객체와 DB 테이블을 매핑해주는 ORM 라이브러리
+	// 역할: MySQL(RDS)과 연동하여 캠페인 수량 관리 및 참여 로그 저장 담당
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	// [Spring Kafka] Apache Kafka와의 연동을 지원하는 라이브러리
+	// 역할: API 서버(Producer)에서 보낸 이벤트를 Consumer가 순차적으로 처리하게 함 (트래픽 완충)
+	implementation 'org.springframework.boot:spring-boot-starter-kafka'
+
+	// [Thymeleaf] 서버 사이드 템플릿 엔진
+	// 역할: 간단한 선착순 응모 페이지 화면 렌더링 또는 관리자용 통계 대시보드 화면 구성
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+
+	// [Spring Web (MVC)] RESTful API 및 웹 애플리케이션 구축을 위한 핵심 라이브러리
+	// 역할: 사용자의 선착순 참여 요청을 받는 API 엔드포인트 생성
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+	// [Bean Validation] 데이터 유효성 검증 라이브러리
+	// 역할: 입력된 캠페인 ID나 사용자 정보가 올바른 형식인지 자동으로 검증
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-batch-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-kafka-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-thymeleaf-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

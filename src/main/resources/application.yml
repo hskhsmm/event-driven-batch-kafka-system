@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: event-driven-batch-kafka-system
+
+  profiles:
+    active: local
