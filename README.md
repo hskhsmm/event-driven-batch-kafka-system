@@ -1,6 +1,6 @@
 
 
-# 🚀 Event-Driven Batch & Kafka System: 선착순 캠페인 처리
+#  Event-Driven Batch & Kafka System: 선착순 캠페인 처리
 
 > **Java 25와 Spring Boot 4.0** 환경에서 대규모 트래픽 폭증을 안전하게 처리하기 위한 **이벤트 기반 아키텍처** 실험 프로젝트입니다.
 
