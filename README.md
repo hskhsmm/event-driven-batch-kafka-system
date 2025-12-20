@@ -75,7 +75,7 @@ API 서버, DB, 배치 처리의 역할을 명확히 분리하고,
 
 ##  핵심 설계 포인트
 
-### 1️ Virtual Thread 기반 Ingress 처리
+### 1️. Virtual Thread 기반 Ingress 처리
 
 * 가상 스레드를 활용해
   **HTTP 요청 수 ≠ OS 스레드 수** 구조를 유지
@@ -86,7 +86,7 @@ API 서버, DB, 배치 처리의 역할을 명확히 분리하고,
 
 ---
 
-### 2️ Kafka를 활용한 동시성 책임 분리
+### 2️. Kafka를 활용한 동시성 책임 분리
 
 #### 문제
 
@@ -112,7 +112,7 @@ Kafka가 없을 경우, 다수의 API 서버는 동일한 캠페인 행에 동�
 
 ---
 
-### 3️ 원자적 수량 차감 (Atomic Update)
+### 3️. 원자적 수량 차감 (Atomic Update)
 
 별도의 분산 락 없이
 **SQL 수준에서 수량 검증과 차감을 동시에 수행**합니다.
@@ -132,6 +132,11 @@ WHERE id = :id
 
 ---
 
+<img width="170" height="598" alt="image" src="https://github.com/user-attachments/assets/b3fd5307-21a8-4b85-aa7f-f31387edff13" />
+
+
+
+---
 ##  트래픽 폭증 테스트 (Performance Test)
 
 **k6**를 활용해 시스템의 안정성과 한계를 검증합니다.
