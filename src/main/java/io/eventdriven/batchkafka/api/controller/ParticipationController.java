@@ -1,6 +1,6 @@
 package io.eventdriven.batchkafka.api.controller;
 
-import io.eventdriven.batchkafka.api.controller.dto.ParticipationRequest;
+import io.eventdriven.batchkafka.api.dto.request.ParticipationRequest;
 import io.eventdriven.batchkafka.application.service.ParticipationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

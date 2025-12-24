@@ -1,7 +1,7 @@
 package io.eventdriven.batchkafka.api.controller;
 
-import io.eventdriven.batchkafka.api.controller.dto.CampaignCreateRequest;
-import io.eventdriven.batchkafka.api.controller.dto.CampaignResponse;
+import io.eventdriven.batchkafka.api.dto.request.CampaignCreateRequest;
+import io.eventdriven.batchkafka.api.dto.response.CampaignResponse;
 import io.eventdriven.batchkafka.application.service.CampaignService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
