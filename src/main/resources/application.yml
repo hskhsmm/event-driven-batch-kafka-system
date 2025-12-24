@@ -7,5 +7,11 @@ spring:
   profiles:
     active: local
 
+  # Virtual Thread 활성화 (Java 25 + Spring Boot 4.0.1)
+  # 역할: 대량의 HTTP 요청을 저비용으로 처리 (트래픽 유입 최적화)
+  threads:
+    virtual:
+      enabled: true
+
   kafka:
     bootstrap-servers: localhost:9092
