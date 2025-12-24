@@ -49,6 +49,10 @@ dependencies {
 	// 역할: 입력된 캠페인 ID나 사용자 정보가 올바른 형식인지 자동으로 검증
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+	// [Jackson] JSON 직렬화/역직렬화 라이브러리
+	// 역할: Kafka 메시지를 JSON 포맷으로 변환하여 확장성 있는 메시지 구조 제공
+	implementation 'com.fasterxml.jackson.core:jackson-databind'
+
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'com.mysql:mysql-connector-j'
