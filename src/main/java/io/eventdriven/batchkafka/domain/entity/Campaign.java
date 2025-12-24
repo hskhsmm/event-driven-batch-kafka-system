@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "campaign")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED) //리플렉션
-public class Campaign {
+public class Campaign extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
