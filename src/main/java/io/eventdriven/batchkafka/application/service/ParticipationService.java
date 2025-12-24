@@ -1,5 +1,8 @@
 package io.eventdriven.batchkafka.application.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.eventdriven.batchkafka.application.event.ParticipationEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -9,13 +12,20 @@ import org.springframework.stereotype.Service;
 public class ParticipationService {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
     public void participate(Long campaignId, Long userId) {
-        // 메시지 포맷: "campaignId:userId"
-        // 파티션 키를 campaignId로 설정하여 순서 보장 (같은 캠페인은 같은 파티션으로)
-        String key = String.valueOf(campaignId);
-        String message = campaignId + ":" + userId;
+        ParticipationEvent event = new ParticipationEvent(campaignId, userId);
 
-        kafkaTemplate.send("campaign-participation-topic", key, message);
+        try {
+            // 객체를 JSON 문자열로 변환
+            String message = objectMapper.writeValueAsString(event);
+
+            // Kafka 전송 (Key: campaignId -> 순서 보장)
+            kafkaTemplate.send("campaign-participation-topic", String.valueOf(campaignId), message);
+
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("이벤트 직렬화 중 오류 발생", e);
+        }
     }
 }

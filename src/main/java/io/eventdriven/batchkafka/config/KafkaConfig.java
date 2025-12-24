@@ -1,12 +1,17 @@
 package io.eventdriven.batchkafka.config;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
+import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
@@ -59,5 +64,37 @@ public class KafkaConfig {
                 .partitions(1)
                 .replicas(1)
                 .build();
+    }
+
+    /**
+     * Kafka Consumer 설정
+     * - Key: String
+     * - Value: String (JSON 문자열)
+     * - 순서 보장을 위해 단일 Consumer로 설정
+     */
+    @Bean
+    public ConsumerFactory<String, String> consumerFactory() {
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, "campaign-participation-group");
+        configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        // 메시지 순서 보장을 위한 설정
+        configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1); // 한 번에 1개씩 처리
+        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // 수동 커밋 (처리 완료 후 커밋)
+
+        return new DefaultKafkaConsumerFactory<>(configProps);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory());
+        factory.setConcurrency(1); // 단일 Consumer 스레드 (순서 보장)
+        factory.getContainerProperties().setAckMode(
+                org.springframework.kafka.listener.ContainerProperties.AckMode.MANUAL); // 수동 커밋
+        return factory;
     }
 }
