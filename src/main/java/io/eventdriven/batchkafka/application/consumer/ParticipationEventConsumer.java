@@ -51,16 +51,17 @@ public class ParticipationEventConsumer {
             Campaign campaign = campaignRepository.findById(event.getCampaignId())
                     .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 캠페인입니다."));
 
-            // 재고 확인 및 차감
+            // 재고 차감 시도 (도메인 객체가 비즈니스 규칙 검증)
             ParticipationStatus status;
-            if (campaign.getCurrentStock() > 0) {
-                campaign.decreaseStock(); // 재고 차감
+            try {
+                campaign.decreaseStock(); // 재고 부족 시 IllegalStateException 발생
                 status = ParticipationStatus.SUCCESS;
                 log.info("🎉 선착순 참여 성공 - User ID: {}, 남은 재고: {}",
                         event.getUserId(), campaign.getCurrentStock());
-            } else {
+            } catch (IllegalStateException e) {
                 status = ParticipationStatus.FAIL;
-                log.warn("❌ 선착순 마감 - User ID: {}, 재고 소진", event.getUserId());
+                log.warn("❌ 선착순 마감 - User ID: {}, 사유: {}",
+                        event.getUserId(), e.getMessage());
             }
 
             // 참여 이력 저장

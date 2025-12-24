@@ -38,9 +38,10 @@ public class Campaign extends BaseTimeEntity {
     // 밑의 메서드는 간단한 규칙이니까 내부 로직으로
 
     public void decreaseStock() {
-        if (this.currentStock > 0) {
-            this.currentStock--;
+        if (this.currentStock <= 0) {
+            throw new IllegalStateException("재고가 부족합니다.");
         }
+        this.currentStock--;
     }
 
 
