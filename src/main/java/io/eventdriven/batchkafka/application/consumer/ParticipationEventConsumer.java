@@ -15,13 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Kafka Consumer: 선착순 참여 이벤트 처리
- *
- * 역할:
- * 1. Kafka Topic에서 JSON 메시지를 수신
- * 2. Campaign 재고 확인 및 차감 (원자적 연산)
- * 3. ParticipationHistory 저장 (성공/실패 기록)
- * 4. 수동 커밋으로 메시지 처리 보장
+ * 선착순 참여 이벤트 Consumer
  */
 @Slf4j
 @Component
@@ -42,43 +36,35 @@ public class ParticipationEventConsumer {
         try {
             log.info("📨 Kafka 메시지 수신: {}", message);
 
-            // JSON 문자열 → ParticipationEvent 객체로 변환
             ParticipationEvent event = objectMapper.readValue(message, ParticipationEvent.class);
             log.info("✅ JSON 파싱 성공 - Campaign ID: {}, User ID: {}",
                     event.getCampaignId(), event.getUserId());
 
-            // Campaign 조회
-            Campaign campaign = campaignRepository.findById(event.getCampaignId())
-                    .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 캠페인입니다."));
+            // 원자적 재고 차감 (반환값: 0=재고 부족, 1=성공)
+            int updatedRows = campaignRepository.decreaseStockAtomic(event.getCampaignId());
 
-            // 재고 차감 시도 (도메인 객체가 비즈니스 규칙 검증)
             ParticipationStatus status;
-            try {
-                campaign.decreaseStock(); // 재고 부족 시 IllegalStateException 발생
+            if (updatedRows > 0) {
                 status = ParticipationStatus.SUCCESS;
-                log.info("🎉 선착순 참여 성공 - User ID: {}, 남은 재고: {}",
-                        event.getUserId(), campaign.getCurrentStock());
-            } catch (IllegalStateException e) {
+                log.info("🎉 선착순 참여 성공 - User ID: {}, Campaign ID: {}",
+                        event.getUserId(), event.getCampaignId());
+            } else {
                 status = ParticipationStatus.FAIL;
-                log.warn("❌ 선착순 마감 - User ID: {}, 사유: {}",
-                        event.getUserId(), e.getMessage());
+                log.warn("❌ 선착순 마감 - User ID: {}, Campaign ID: {}, 사유: 재고 부족",
+                        event.getUserId(), event.getCampaignId());
             }
 
             // 참여 이력 저장
-            ParticipationHistory history = new ParticipationHistory(
-                    campaign,
-                    event.getUserId(),
-                    status
-            );
+            Campaign campaign = campaignRepository.findById(event.getCampaignId())
+                    .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 캠페인입니다."));
+            ParticipationHistory history = new ParticipationHistory(campaign, event.getUserId(), status);
             participationHistoryRepository.save(history);
 
-            // 메시지 처리 완료 - 수동 커밋
             acknowledgment.acknowledge();
             log.info("✅ 메시지 처리 완료 및 커밋");
 
         } catch (Exception e) {
             log.error("🚨 메시지 처리 중 오류 발생: {}", e.getMessage(), e);
-            // 오류 발생 시 커밋하지 않음 → 재처리 가능
         }
     }
 }

@@ -1,4 +1,4 @@
-package io.eventdriven.batchkafka.api.controller.dto;
+package io.eventdriven.batchkafka.api.dto.response;
 
 import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.CampaignStatus;

@@ -1,4 +1,4 @@
-package io.eventdriven.batchkafka.api.controller.dto;
+package io.eventdriven.batchkafka.api.dto.request;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
