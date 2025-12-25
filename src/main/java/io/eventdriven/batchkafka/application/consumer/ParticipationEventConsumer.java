@@ -1,6 +1,6 @@
 package io.eventdriven.batchkafka.application.consumer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import io.eventdriven.batchkafka.application.event.ParticipationEvent;
 import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ParticipationEventConsumer {
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
     private final CampaignRepository campaignRepository;
     private final ParticipationHistoryRepository participationHistoryRepository;
 
@@ -36,7 +36,7 @@ public class ParticipationEventConsumer {
         try {
             log.info("📨 Kafka 메시지 수신: {}", message);
 
-            ParticipationEvent event = objectMapper.readValue(message, ParticipationEvent.class);
+            ParticipationEvent event = jsonMapper.readValue(message, ParticipationEvent.class);
             log.info("✅ JSON 파싱 성공 - Campaign ID: {}, User ID: {}",
                     event.getCampaignId(), event.getUserId());
 
