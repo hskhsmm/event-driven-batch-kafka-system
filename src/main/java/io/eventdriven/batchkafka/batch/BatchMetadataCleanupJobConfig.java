@@ -35,9 +35,11 @@ public class BatchMetadataCleanupJobConfig {
 
     @Bean
     public Job batchMetadataCleanupJob(JobRepository jobRepository,
-                                       Step batchMetadataCleanupStep) {
+                                       Step batchMetadataCleanupStep,
+                                       BatchExecutionListener batchExecutionListener) {
         return new JobBuilder("batchMetadataCleanup", jobRepository)
                 .start(batchMetadataCleanupStep)
+                .listener(batchExecutionListener)
                 .build();
     }
 }

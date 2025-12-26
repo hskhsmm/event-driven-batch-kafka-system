@@ -30,9 +30,11 @@ public class AggregateParticipationJobConfig {
 
     @Bean
     public Job aggregateParticipationJob(JobRepository jobRepository,
-                                         Step aggregateByWindowStep) {
+                                         Step aggregateByWindowStep,
+                                         BatchExecutionListener batchExecutionListener) {
         return new JobBuilder("aggregateParticipation", jobRepository)
                 .start(aggregateByWindowStep)
+                .listener(batchExecutionListener)
                 .build();
     }
 }
