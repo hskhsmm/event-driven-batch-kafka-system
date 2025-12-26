@@ -1,10 +1,14 @@
 spring:
   datasource:
     # Docker Compose로 띄운 MySQL에 접속 (localhost)
-    url: jdbc:mysql://localhost:3306/${MYSQL_DATABASE}
+    url: jdbc:mysql://localhost:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&defaultAuthenticationPlugin=mysql_native_password
     username: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+  batch:
+    job:
+      enabled: false  # 애플리케이션 시작 시 자동 Job 실행 비활성화
 
   jpa:
     hibernate:
@@ -13,6 +17,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
 
   kafka:
     bootstrap-servers: localhost:9092
