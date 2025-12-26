@@ -1,18 +1,27 @@
 package io.eventdriven.batchkafka.batch;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
+/**
+ * 참여 이력 집계 Tasklet
+ * - participation_history → campaign_stats 집계
+ * - 일자별, 캠페인별 성공/실패 건수 통계
+ */
+@Slf4j
 class AggregateParticipationTasklet implements Tasklet {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
