@@ -98,19 +98,19 @@ class BatchMetadataCleanupTasklet implements Tasklet {
             log.debug("  ✓ BATCH_JOB_EXECUTION: {} 건 삭제", deletedJobExecution);
             totalDeleted += deletedJobExecution;
 
-            log.info("✅ 배치 메타데이터 정리 완료 - 총 {} 건 삭제", totalDeleted);
+            log.info(" 배치 메타데이터 정리 완료 - 총 {} 건 삭제", totalDeleted);
 
             contribution.setExitStatus(new ExitStatus("DELETED_" + totalDeleted));
             return RepeatStatus.FINISHED;
 
         } catch (DataAccessException e) {
-            log.error("❌ 메타데이터 정리 중 DB 오류 발생", e);
+            log.error(" 메타데이터 정리 중 DB 오류 발생", e);
             contribution.setExitStatus(ExitStatus.FAILED
                     .addExitDescription("DB 오류: " + e.getMessage()));
             throw e;
 
         } catch (Exception e) {
-            log.error("❌ 메타데이터 정리 중 예상치 못한 오류 발생", e);
+            log.error(" 메타데이터 정리 중 예상치 못한 오류 발생", e);
             contribution.setExitStatus(ExitStatus.FAILED
                     .addExitDescription("예상치 못한 오류: " + e.getMessage()));
             throw new RuntimeException("메타데이터 정리 중 오류 발생", e);
