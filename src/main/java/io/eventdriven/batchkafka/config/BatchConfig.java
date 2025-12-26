@@ -5,6 +5,7 @@ import org.springframework.batch.core.launch.support.TaskExecutorJobLauncher;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 
 /**
@@ -20,6 +21,7 @@ public class BatchConfig {
      * - API는 즉시 jobExecutionId를 반환
      * - 대용량 집계 작업 시 타임아웃 방지
      */
+    @Primary
     @Bean(name = "asyncJobLauncher")
     public JobLauncher asyncJobLauncher(JobRepository jobRepository) throws Exception {
         TaskExecutorJobLauncher jobLauncher = new TaskExecutorJobLauncher();
