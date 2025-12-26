@@ -2,10 +2,12 @@ package io.eventdriven.batchkafka.api.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.batch.core.*;
-import org.springframework.batch.core.explore.JobExplorer;
-import org.springframework.batch.core.launch.JobLauncher;
-import org.springframework.batch.core.launch.JobParametersNotFoundException;
+import org.springframework.batch.core.job.*;
+import org.springframework.batch.core.job.parameters.JobParameters;
+import org.springframework.batch.core.job.parameters.JobParametersBuilder;
+import org.springframework.batch.core.job.parameters.InvalidJobParametersException;
+import org.springframework.batch.core.repository.explore.JobExplorer;
+import org.springframework.batch.core.launch.*;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -84,7 +86,7 @@ public class BatchController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "해당 날짜의 집계가 이미 완료되었습니다."));
 
-        } catch (JobParametersInvalidException e) {
+        } catch (InvalidJobParametersException e) {
             log.error("🚨 배치 실행 실패 - 잘못된 파라미터: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "잘못된 배치 파라미터: " + e.getMessage()));

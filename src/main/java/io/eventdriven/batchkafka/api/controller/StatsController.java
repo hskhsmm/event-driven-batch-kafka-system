@@ -126,7 +126,7 @@ public class StatsController {
 
             // 일자별 통계
             List<Map<String, Object>> dailyStats = stats.stream()
-                    .map(stat -> Map.of(
+                    .<Map<String, Object>>map(stat -> Map.of(
                             "date", stat.getStatsDate().toString(),
                             "successCount", stat.getSuccessCount(),
                             "failCount", stat.getFailCount(),

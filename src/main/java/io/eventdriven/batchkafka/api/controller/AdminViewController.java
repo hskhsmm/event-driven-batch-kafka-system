@@ -1,13 +1,13 @@
 package io.eventdriven.batchkafka.api.controller;
 
-import io.eventdriven.batchkafka.api.controller.dto.CampaignResponse;
+import io.eventdriven.batchkafka.api.dto.response.CampaignResponse;
 import io.eventdriven.batchkafka.application.service.CampaignService;
 import io.eventdriven.batchkafka.domain.entity.CampaignStats;
 import io.eventdriven.batchkafka.domain.repository.CampaignStatsRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.job.Job;
+import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;

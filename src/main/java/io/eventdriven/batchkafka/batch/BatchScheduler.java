@@ -2,10 +2,11 @@ package io.eventdriven.batchkafka.batch;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.batch.core.*;
+import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
+import org.springframework.batch.core.job.parameters.InvalidJobParametersException;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.launch.JobLauncher;
@@ -60,7 +61,7 @@ public class BatchScheduler {
         } catch (JobInstanceAlreadyCompleteException e) {
             log.warn(" 일일 집계가 이미 완료되었습니다.", e);
 
-        } catch (JobParametersInvalidException e) {
+        } catch (InvalidJobParametersException e) {
             log.error(" 잘못된 배치 파라미터", e);
 
         } catch (Exception e) {
@@ -94,7 +95,7 @@ public class BatchScheduler {
         } catch (JobInstanceAlreadyCompleteException e) {
             log.warn(" 메타데이터 정리가 이미 완료되었습니다.", e);
 
-        } catch (JobParametersInvalidException e) {
+        } catch (InvalidJobParametersException e) {
             log.error(" 잘못된 배치 파라미터", e);
 
         } catch (Exception e) {
