@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -71,30 +72,59 @@ class AggregateParticipationTasklet implements Tasklet {
                         "JobParameters required: either (start,end) as ISO-8601 datetime or (date) as YYYY-MM-DD");
             }
 
-            // 2. 집계 SQL 실행
-            String sql = """
-                    INSERT INTO campaign_stats (campaign_id, success_count, fail_count, stats_date)
-                    SELECT p.campaign_id,
-                           SUM(CASE WHEN p.status = 'SUCCESS' THEN 1 ELSE 0 END) AS success_count,
-                           SUM(CASE WHEN p.status = 'FAIL' THEN 1 ELSE 0 END)    AS fail_count,
-                           DATE(p.created_at)                                   AS stats_date
-                    FROM participation_history p
-                    WHERE p.created_at >= :start AND p.created_at < :end
-                    GROUP BY p.campaign_id, DATE(p.created_at)
-                    ON DUPLICATE KEY UPDATE
-                      success_count = VALUES(success_count),
-                      fail_count    = VALUES(fail_count)
+            // 2. 집계 대상 캠페인 ID 목록 조회 (대용량 처리 최적화)
+            String campaignIdsSql = """
+                    SELECT DISTINCT campaign_id
+                    FROM participation_history
+                    WHERE created_at >= :start AND created_at < :end
+                    ORDER BY campaign_id
                     """;
 
-            MapSqlParameterSource ps = new MapSqlParameterSource()
+            MapSqlParameterSource campaignIdsParams = new MapSqlParameterSource()
                     .addValue("start", start)
                     .addValue("end", end);
 
-            log.debug("📊 집계 SQL 실행 - start: {}, end: {}", start, end);
+            List<Long> campaignIds = jdbcTemplate.queryForList(
+                    campaignIdsSql,
+                    campaignIdsParams,
+                    Long.class
+            );
 
-            int updated = jdbcTemplate.update(sql, ps);
+            if (campaignIds.isEmpty()) {
+                log.warn("⚠️ 집계 대상 데이터 없음 - 기간: {} ~ {}", start, end);
+                contribution.setExitStatus(new ExitStatus("UPDATED_0")
+                        .addExitDescription("집계 대상 데이터 없음"));
+                return RepeatStatus.FINISHED;
+            }
 
-            log.info("✅ 집계 완료 - 업데이트된 행 수: {}", updated);
+            log.info("📊 집계 대상 캠페인: {} 개 - {}", campaignIds.size(), campaignIds);
+
+            // 3. 캠페인별 순차 집계 (작은 트랜잭션으로 분할)
+            int totalUpdated = 0;
+            int successCount = 0;
+            int failureCount = 0;
+
+            for (Long campaignId : campaignIds) {
+                try {
+                    int updated = aggregateByCampaign(campaignId, start, end);
+                    totalUpdated += updated;
+                    successCount++;
+                    log.debug("  ✓ 캠페인 {} 집계 완료 - {} 행 업데이트", campaignId, updated);
+                } catch (DataAccessException e) {
+                    failureCount++;
+                    log.error("  ✗ 캠페인 {} 집계 실패", campaignId, e);
+                    // 개별 캠페인 실패는 로깅만 하고 계속 진행
+                }
+            }
+
+            log.info("✅ 전체 집계 완료 - 성공: {}/{}, 실패: {}, 총 업데이트: {} 행",
+                    successCount, campaignIds.size(), failureCount, totalUpdated);
+
+            if (failureCount > 0) {
+                log.warn("⚠️ 일부 캠페인 집계 실패 - 실패 수: {}", failureCount);
+            }
+
+            int updated = totalUpdated;
 
             // 3. 성공 상태 기록
             contribution.setExitStatus(new ExitStatus("UPDATED_" + updated));
@@ -128,6 +158,40 @@ class AggregateParticipationTasklet implements Tasklet {
                     .addExitDescription("예상치 못한 오류: " + e.getMessage()));
             throw new RuntimeException("집계 중 예상치 못한 오류가 발생했습니다.", e);
         }
+    }
+
+    /**
+     * 캠페인별 집계 실행
+     * - 작은 단위로 트랜잭션 분할하여 성능 최적화
+     * - 개별 캠페인 실패 시에도 다른 캠페인 집계 계속 진행
+     *
+     * @param campaignId 캠페인 ID
+     * @param start 집계 시작 시간
+     * @param end 집계 종료 시간
+     * @return 업데이트된 행 수
+     */
+    private int aggregateByCampaign(Long campaignId, LocalDateTime start, LocalDateTime end) {
+        String sql = """
+                INSERT INTO campaign_stats (campaign_id, success_count, fail_count, stats_date)
+                SELECT :campaignId,
+                       SUM(CASE WHEN p.status = 'SUCCESS' THEN 1 ELSE 0 END) AS success_count,
+                       SUM(CASE WHEN p.status = 'FAIL' THEN 1 ELSE 0 END)    AS fail_count,
+                       DATE(:start)                                          AS stats_date
+                FROM participation_history p
+                WHERE p.campaign_id = :campaignId
+                  AND p.created_at >= :start
+                  AND p.created_at < :end
+                ON DUPLICATE KEY UPDATE
+                  success_count = VALUES(success_count),
+                  fail_count    = VALUES(fail_count)
+                """;
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("campaignId", campaignId)
+                .addValue("start", start)
+                .addValue("end", end);
+
+        return jdbcTemplate.update(sql, params);
     }
 }
 
