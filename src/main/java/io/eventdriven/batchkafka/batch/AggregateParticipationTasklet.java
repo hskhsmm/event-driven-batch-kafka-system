@@ -34,41 +34,100 @@ class AggregateParticipationTasklet implements Tasklet {
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         Map<String, Object> params = chunkContext.getStepContext().getJobParameters();
 
-        LocalDateTime start;
-        LocalDateTime end;
+        try {
+            // 1. 파라미터 파싱 및 검증
+            LocalDateTime start;
+            LocalDateTime end;
 
-        if (params.containsKey("start") && params.containsKey("end")) {
-            start = LocalDateTime.parse(String.valueOf(params.get("start")));
-            end = LocalDateTime.parse(String.valueOf(params.get("end")));
-        } else if (params.containsKey("date")) {
-            LocalDate date = LocalDate.parse(String.valueOf(params.get("date")));
-            start = date.atStartOfDay();
-            end = date.plusDays(1).atStartOfDay();
-        } else {
-            throw new IllegalArgumentException("JobParameters required: either (start,end) as ISO-8601 datetime or (date) as YYYY-MM-DD");
+            if (params.containsKey("start") && params.containsKey("end")) {
+                try {
+                    start = LocalDateTime.parse(String.valueOf(params.get("start")));
+                    end = LocalDateTime.parse(String.valueOf(params.get("end")));
+                    log.info("🔄 집계 시작 - 기간: {} ~ {}", start, end);
+                } catch (DateTimeParseException e) {
+                    log.error("❌ 날짜 파싱 실패 - start: {}, end: {}",
+                            params.get("start"), params.get("end"), e);
+                    contribution.setExitStatus(ExitStatus.FAILED
+                            .addExitDescription("날짜 형식 오류: " + e.getMessage()));
+                    throw new IllegalArgumentException("날짜 형식이 올바르지 않습니다. ISO-8601 형식을 사용하세요.", e);
+                }
+            } else if (params.containsKey("date")) {
+                try {
+                    LocalDate date = LocalDate.parse(String.valueOf(params.get("date")));
+                    start = date.atStartOfDay();
+                    end = date.plusDays(1).atStartOfDay();
+                    log.info("🔄 집계 시작 - 날짜: {}", date.format(DateTimeFormatter.ISO_DATE));
+                } catch (DateTimeParseException e) {
+                    log.error("❌ 날짜 파싱 실패 - date: {}", params.get("date"), e);
+                    contribution.setExitStatus(ExitStatus.FAILED
+                            .addExitDescription("날짜 형식 오류: " + e.getMessage()));
+                    throw new IllegalArgumentException("날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식을 사용하세요.", e);
+                }
+            } else {
+                log.error("❌ 필수 파라미터 누락 - params: {}", params);
+                contribution.setExitStatus(ExitStatus.FAILED
+                        .addExitDescription("필수 파라미터 누락"));
+                throw new IllegalArgumentException(
+                        "JobParameters required: either (start,end) as ISO-8601 datetime or (date) as YYYY-MM-DD");
+            }
+
+            // 2. 집계 SQL 실행
+            String sql = """
+                    INSERT INTO campaign_stats (campaign_id, success_count, fail_count, stats_date)
+                    SELECT p.campaign_id,
+                           SUM(CASE WHEN p.status = 'SUCCESS' THEN 1 ELSE 0 END) AS success_count,
+                           SUM(CASE WHEN p.status = 'FAIL' THEN 1 ELSE 0 END)    AS fail_count,
+                           DATE(p.created_at)                                   AS stats_date
+                    FROM participation_history p
+                    WHERE p.created_at >= :start AND p.created_at < :end
+                    GROUP BY p.campaign_id, DATE(p.created_at)
+                    ON DUPLICATE KEY UPDATE
+                      success_count = VALUES(success_count),
+                      fail_count    = VALUES(fail_count)
+                    """;
+
+            MapSqlParameterSource ps = new MapSqlParameterSource()
+                    .addValue("start", start)
+                    .addValue("end", end);
+
+            log.debug("📊 집계 SQL 실행 - start: {}, end: {}", start, end);
+
+            int updated = jdbcTemplate.update(sql, ps);
+
+            log.info("✅ 집계 완료 - 업데이트된 행 수: {}", updated);
+
+            // 3. 성공 상태 기록
+            contribution.setExitStatus(new ExitStatus("UPDATED_" + updated));
+            return RepeatStatus.FINISHED;
+
+        } catch (DateTimeParseException e) {
+            // 날짜 파싱 오류 (이미 위에서 처리했지만 안전장치)
+            log.error("❌ 날짜 파싱 오류", e);
+            contribution.setExitStatus(ExitStatus.FAILED
+                    .addExitDescription("날짜 파싱 오류: " + e.getMessage()));
+            throw new IllegalArgumentException("날짜 형식 오류", e);
+
+        } catch (DataAccessException e) {
+            // DB 접근 오류 (쿼리 실행 실패, 연결 끊김 등)
+            log.error("❌ DB 접근 오류 발생 - 집계 실패", e);
+            contribution.setExitStatus(ExitStatus.FAILED
+                    .addExitDescription("DB 오류: " + e.getMessage()));
+            throw e; // 트랜잭션 롤백을 위해 재throw
+
+        } catch (IllegalArgumentException e) {
+            // 파라미터 검증 실패
+            log.error("❌ 잘못된 파라미터", e);
+            contribution.setExitStatus(ExitStatus.FAILED
+                    .addExitDescription("파라미터 오류: " + e.getMessage()));
+            throw e;
+
+        } catch (Exception e) {
+            // 예상치 못한 오류
+            log.error("❌ 예상치 못한 오류 발생", e);
+            contribution.setExitStatus(ExitStatus.FAILED
+                    .addExitDescription("예상치 못한 오류: " + e.getMessage()));
+            throw new RuntimeException("집계 중 예상치 못한 오류가 발생했습니다.", e);
         }
-
-        String sql = "INSERT INTO campaign_stats (campaign_id, success_count, fail_count, stats_date)\n" +
-                "SELECT p.campaign_id,\n" +
-                "       SUM(CASE WHEN p.status = 'SUCCESS' THEN 1 ELSE 0 END) AS success_count,\n" +
-                "       SUM(CASE WHEN p.status = 'FAIL' THEN 1 ELSE 0 END)    AS fail_count,\n" +
-                "       DATE(p.created_at)                                   AS stats_date\n" +
-                "FROM participation_history p\n" +
-                "WHERE p.created_at >= :start AND p.created_at < :end\n" +
-                "GROUP BY p.campaign_id, DATE(p.created_at)\n" +
-                "ON DUPLICATE KEY UPDATE\n" +
-                "  success_count = VALUES(success_count),\n" +
-                "  fail_count    = VALUES(fail_count)";
-
-        MapSqlParameterSource ps = new MapSqlParameterSource()
-                .addValue("start", start)
-                .addValue("end", end);
-
-        int updated = jdbcTemplate.update(sql, ps);
-
-        // record in exit status for logs/inspection
-        contribution.setExitStatus(new ExitStatus("UPDATED_" + updated));
-        return RepeatStatus.FINISHED;
     }
 }
 
