@@ -1,5 +1,6 @@
 package io.eventdriven.batchkafka.api.controller;
 
+import io.eventdriven.batchkafka.api.common.ApiResponse;
 import io.eventdriven.batchkafka.domain.entity.CampaignStats;
 import io.eventdriven.batchkafka.domain.repository.CampaignStatsRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,18 +32,20 @@ public class StatsController {
      * GET /api/admin/stats/daily?date=2025-12-26
      */
     @GetMapping("/daily")
-    public ResponseEntity<Map<String, Object>> getDailyStats(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDailyStats(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         try {
             List<CampaignStats> stats = statsRepository.findByStatsDate(date);
 
             if (stats.isEmpty()) {
-                return ResponseEntity.ok(Map.of(
+                Map<String, Object> emptyData = Map.of(
                         "date", date.toString(),
-                        "message", "해당 날짜의 집계 데이터가 없습니다. 배치를 먼저 실행해주세요.",
                         "campaigns", List.of()
-                ));
+                );
+                return ResponseEntity.ok(
+                        ApiResponse.success("해당 날짜의 집계 데이터가 없습니다. 배치를 먼저 실행해주세요.", emptyData)
+                );
             }
 
             // 통계 데이터를 DTO로 변환
@@ -65,9 +68,9 @@ public class StatsController {
             long totalFail = stats.stream().mapToLong(CampaignStats::getFailCount).sum();
             long totalCount = totalSuccess + totalFail;
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("date", date.toString());
-            response.put("summary", Map.of(
+            Map<String, Object> data = new HashMap<>();
+            data.put("date", date.toString());
+            data.put("summary", Map.of(
                     "totalCampaigns", stats.size(),
                     "totalSuccess", totalSuccess,
                     "totalFail", totalFail,
@@ -75,14 +78,14 @@ public class StatsController {
                     "overallSuccessRate", totalCount > 0 ?
                             String.format("%.2f%%", (totalSuccess * 100.0 / totalCount)) : "0.00%"
             ));
-            response.put("campaigns", campaigns);
+            data.put("campaigns", campaigns);
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success(data));
 
         } catch (Exception e) {
             log.error("🚨 통계 조회 실패 - date: {}", date, e);
             return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "통계 조회 중 오류가 발생했습니다."));
+                    .body(ApiResponse.fail("통계 조회 중 오류가 발생했습니다."));
         }
     }
 
@@ -91,7 +94,7 @@ public class StatsController {
      * GET /api/admin/stats/campaign/{campaignId}?startDate=2025-12-01&endDate=2025-12-31
      */
     @GetMapping("/campaign/{campaignId}")
-    public ResponseEntity<Map<String, Object>> getCampaignStats(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCampaignStats(
             @PathVariable Long campaignId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
@@ -108,20 +111,22 @@ public class StatsController {
             // 날짜 범위 검증
             if (startDate.isAfter(endDate)) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("error", "시작 날짜는 종료 날짜보다 이전이어야 합니다."));
+                        .body(ApiResponse.fail("시작 날짜는 종료 날짜보다 이전이어야 합니다."));
             }
 
             List<CampaignStats> stats = statsRepository.findByCampaignIdAndStatsDateBetween(
                     campaignId, startDate, endDate);
 
             if (stats.isEmpty()) {
-                return ResponseEntity.ok(Map.of(
+                Map<String, Object> emptyData = Map.of(
                         "campaignId", campaignId,
                         "startDate", startDate.toString(),
                         "endDate", endDate.toString(),
-                        "message", "해당 기간의 통계 데이터가 없습니다.",
                         "dailyStats", List.of()
-                ));
+                );
+                return ResponseEntity.ok(
+                        ApiResponse.success("해당 기간의 통계 데이터가 없습니다.", emptyData)
+                );
             }
 
             // 일자별 통계
@@ -140,26 +145,26 @@ public class StatsController {
             long totalFail = stats.stream().mapToLong(CampaignStats::getFailCount).sum();
             long totalCount = totalSuccess + totalFail;
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("campaignId", campaignId);
-            response.put("campaignName", stats.get(0).getCampaign().getName());
-            response.put("startDate", startDate.toString());
-            response.put("endDate", endDate.toString());
-            response.put("summary", Map.of(
+            Map<String, Object> data = new HashMap<>();
+            data.put("campaignId", campaignId);
+            data.put("campaignName", stats.get(0).getCampaign().getName());
+            data.put("startDate", startDate.toString());
+            data.put("endDate", endDate.toString());
+            data.put("summary", Map.of(
                     "totalSuccess", totalSuccess,
                     "totalFail", totalFail,
                     "totalParticipation", totalCount,
                     "averageSuccessRate", totalCount > 0 ?
                             String.format("%.2f%%", (totalSuccess * 100.0 / totalCount)) : "0.00%"
             ));
-            response.put("dailyStats", dailyStats);
+            data.put("dailyStats", dailyStats);
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success(data));
 
         } catch (Exception e) {
             log.error("🚨 캠페인 통계 조회 실패 - campaignId: {}", campaignId, e);
             return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "통계 조회 중 오류가 발생했습니다."));
+                    .body(ApiResponse.fail("통계 조회 중 오류가 발생했습니다."));
         }
     }
 
