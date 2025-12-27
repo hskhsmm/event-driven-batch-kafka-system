@@ -25,6 +25,7 @@ import java.time.LocalDate;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("removal")
 public class BatchScheduler {
 
     @Qualifier("asyncJobLauncher")

@@ -1,13 +1,14 @@
 package io.eventdriven.batchkafka.api.controller;
 
+import io.eventdriven.batchkafka.api.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.job.*;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.job.parameters.InvalidJobParametersException;
-import org.springframework.batch.core.repository.explore.JobExplorer;
 import org.springframework.batch.core.launch.*;
+import org.springframework.batch.core.repository.explore.JobExplorer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/batch")
 @RequiredArgsConstructor
+@SuppressWarnings("removal")
 public class BatchController {
 
     @Qualifier("asyncJobLauncher")
@@ -39,7 +41,7 @@ public class BatchController {
      * POST /api/admin/batch/aggregate?date=2025-12-26
      */
     @PostMapping("/aggregate")
-    public ResponseEntity<Map<String, Object>> aggregate(
+    public ResponseEntity<ApiResponse<?>> aggregate(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         try {
@@ -57,44 +59,48 @@ public class BatchController {
             log.info("✅ 집계 배치 실행 시작 - jobExecutionId: {}, date: {}",
                     exec.getId(), date);
 
-            Map<String, Object> body = new HashMap<>();
-            body.put("jobExecutionId", exec.getId());
-            body.put("jobInstanceId", exec.getJobInstance().getInstanceId());
-            body.put("status", exec.getStatus().toString());
-            body.put("date", date.toString());
-            body.put("message", "배치 작업이 시작되었습니다. /api/admin/batch/status/{jobExecutionId}에서 진행 상황을 확인하세요.");
+            Map<String, Object> data = new HashMap<>();
+            data.put("jobExecutionId", exec.getId());
+            data.put("jobInstanceId", exec.getJobInstance().getInstanceId());
+            data.put("status", exec.getStatus().toString());
+            data.put("date", date.toString());
 
-            return ResponseEntity.ok(body);
+            return ResponseEntity.ok(
+                    ApiResponse.success(
+                            "배치 작업이 시작되었습니다. /api/admin/batch/status/" + exec.getId() + "에서 진행 상황을 확인하세요.",
+                            data
+                    )
+            );
 
         } catch (IllegalArgumentException e) {
             log.warn("⚠️ 배치 실행 실패 - 잘못된 파라미터: {}", e.getMessage());
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
+                    .body(ApiResponse.fail(e.getMessage()));
 
         } catch (JobExecutionAlreadyRunningException e) {
             log.warn("⚠️ 배치 실행 실패 - 이미 실행 중: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "해당 배치 작업이 이미 실행 중입니다."));
+                    .body(ApiResponse.fail("해당 배치 작업이 이미 실행 중입니다."));
 
         } catch (JobRestartException e) {
             log.error("🚨 배치 실행 실패 - 재시작 불가: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "배치 작업을 재시작할 수 없습니다: " + e.getMessage()));
+                    .body(ApiResponse.fail("배치 작업을 재시작할 수 없습니다: " + e.getMessage()));
 
         } catch (JobInstanceAlreadyCompleteException e) {
             log.warn("⚠️ 배치 실행 실패 - 이미 완료됨: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "해당 날짜의 집계가 이미 완료되었습니다."));
+                    .body(ApiResponse.fail("해당 날짜의 집계가 이미 완료되었습니다."));
 
         } catch (InvalidJobParametersException e) {
             log.error("🚨 배치 실행 실패 - 잘못된 파라미터: {}", e.getMessage());
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "잘못된 배치 파라미터: " + e.getMessage()));
+                    .body(ApiResponse.fail("잘못된 배치 파라미터: " + e.getMessage()));
 
         } catch (Exception e) {
             log.error("🚨 배치 실행 중 예상치 못한 오류 발생", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "배치 실행 중 오류가 발생했습니다: " + e.getMessage()));
+                    .body(ApiResponse.fail("배치 실행 중 오류가 발생했습니다: " + e.getMessage()));
         }
     }
 
@@ -103,28 +109,29 @@ public class BatchController {
      * GET /api/admin/batch/status/{jobExecutionId}
      */
     @GetMapping("/status/{jobExecutionId}")
-    public ResponseEntity<Map<String, Object>> getStatus(@PathVariable Long jobExecutionId) {
+    public ResponseEntity<ApiResponse<?>> getStatus(@PathVariable Long jobExecutionId) {
         try {
             JobExecution execution = jobExplorer.getJobExecution(jobExecutionId);
 
             if (execution == null) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.fail("배치 실행 정보를 찾을 수 없습니다."));
             }
 
-            Map<String, Object> body = new HashMap<>();
-            body.put("jobExecutionId", execution.getId());
-            body.put("jobName", execution.getJobInstance().getJobName());
-            body.put("status", execution.getStatus().toString());
-            body.put("exitStatus", execution.getExitStatus().getExitCode());
-            body.put("exitDescription", execution.getExitStatus().getExitDescription());
-            body.put("startTime", execution.getStartTime());
-            body.put("endTime", execution.getEndTime());
-            body.put("createTime", execution.getCreateTime());
+            Map<String, Object> data = new HashMap<>();
+            data.put("jobExecutionId", execution.getId());
+            data.put("jobName", execution.getJobInstance().getJobName());
+            data.put("status", execution.getStatus().toString());
+            data.put("exitStatus", execution.getExitStatus().getExitCode());
+            data.put("exitDescription", execution.getExitStatus().getExitDescription());
+            data.put("startTime", execution.getStartTime());
+            data.put("endTime", execution.getEndTime());
+            data.put("createTime", execution.getCreateTime());
 
             // Job Parameters 추출
             try {
                 String date = execution.getJobParameters().getString("date");
-                body.put("targetDate", date);
+                data.put("targetDate", date);
             } catch (Exception e) {
                 // date 파라미터가 없을 수 있음
             }
@@ -133,15 +140,15 @@ public class BatchController {
             String exitCode = execution.getExitStatus().getExitCode();
             if (exitCode != null && exitCode.startsWith("UPDATED_")) {
                 String updatedCount = exitCode.substring("UPDATED_".length());
-                body.put("updatedRows", updatedCount);
+                data.put("updatedRows", updatedCount);
             }
 
-            return ResponseEntity.ok(body);
+            return ResponseEntity.ok(ApiResponse.success(data));
 
         } catch (Exception e) {
             log.error("🚨 배치 상태 조회 실패 - jobExecutionId: {}", jobExecutionId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "배치 상태 조회 중 오류가 발생했습니다."));
+                    .body(ApiResponse.fail("배치 상태 조회 중 오류가 발생했습니다."));
         }
     }
 
@@ -150,7 +157,7 @@ public class BatchController {
      * GET /api/admin/batch/history?jobName=aggregateParticipation&size=20
      */
     @GetMapping("/history")
-    public ResponseEntity<Map<String, Object>> getHistory(
+    public ResponseEntity<ApiResponse<?>> getHistory(
             @RequestParam(defaultValue = "aggregateParticipation") String jobName,
             @RequestParam(defaultValue = "20") int size
     ) {
@@ -192,17 +199,17 @@ public class BatchController {
                     })
                     .collect(Collectors.toList());
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("jobName", jobName);
-            response.put("totalCount", history.size());
-            response.put("history", history);
+            Map<String, Object> data = new HashMap<>();
+            data.put("jobName", jobName);
+            data.put("totalCount", history.size());
+            data.put("history", history);
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success(data));
 
         } catch (Exception e) {
             log.error("🚨 배치 이력 조회 실패 - jobName: {}", jobName, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "배치 이력 조회 중 오류가 발생했습니다."));
+                    .body(ApiResponse.fail("배치 이력 조회 중 오류가 발생했습니다."));
         }
     }
 

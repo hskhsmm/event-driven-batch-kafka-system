@@ -13,6 +13,7 @@ import org.springframework.core.task.SimpleAsyncTaskExecutor;
  * - 비동기 JobLauncher: 배치 실행 시 API 응답 지연 방지
  */
 @Configuration
+@SuppressWarnings("removal")
 public class BatchConfig {
 
     /**

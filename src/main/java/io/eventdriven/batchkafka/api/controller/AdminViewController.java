@@ -24,6 +24,7 @@ import java.util.List;
 @Controller
 @RequestMapping("/admin")
 @RequiredArgsConstructor
+@SuppressWarnings("removal")
 public class AdminViewController {
 
     private final CampaignService campaignService;
