@@ -32,7 +32,7 @@ public class StatsController {
      * GET /api/admin/stats/daily?date=2025-12-26
      */
     @GetMapping("/daily")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getDailyStats(
+    public ResponseEntity<ApiResponse<?>> getDailyStats(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         try {
@@ -94,7 +94,7 @@ public class StatsController {
      * GET /api/admin/stats/campaign/{campaignId}?startDate=2025-12-01&endDate=2025-12-31
      */
     @GetMapping("/campaign/{campaignId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getCampaignStats(
+    public ResponseEntity<ApiResponse<?>> getCampaignStats(
             @PathVariable Long campaignId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate

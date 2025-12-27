@@ -7,8 +7,8 @@ import org.springframework.batch.core.job.*;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.job.parameters.InvalidJobParametersException;
-import org.springframework.batch.core.repository.explore.JobExplorer;
 import org.springframework.batch.core.launch.*;
+import org.springframework.batch.core.repository.explore.JobExplorer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/batch")
 @RequiredArgsConstructor
+@SuppressWarnings("removal")
 public class BatchController {
 
     @Qualifier("asyncJobLauncher")
@@ -40,7 +41,7 @@ public class BatchController {
      * POST /api/admin/batch/aggregate?date=2025-12-26
      */
     @PostMapping("/aggregate")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> aggregate(
+    public ResponseEntity<ApiResponse<?>> aggregate(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         try {
@@ -108,7 +109,7 @@ public class BatchController {
      * GET /api/admin/batch/status/{jobExecutionId}
      */
     @GetMapping("/status/{jobExecutionId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getStatus(@PathVariable Long jobExecutionId) {
+    public ResponseEntity<ApiResponse<?>> getStatus(@PathVariable Long jobExecutionId) {
         try {
             JobExecution execution = jobExplorer.getJobExecution(jobExecutionId);
 
@@ -156,7 +157,7 @@ public class BatchController {
      * GET /api/admin/batch/history?jobName=aggregateParticipation&size=20
      */
     @GetMapping("/history")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getHistory(
+    public ResponseEntity<ApiResponse<?>> getHistory(
             @RequestParam(defaultValue = "aggregateParticipation") String jobName,
             @RequestParam(defaultValue = "20") int size
     ) {
