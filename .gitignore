@@ -36,4 +36,9 @@ out/
 ### VS Code ###
 .vscode/
 /.env
+
+# k6 load testing
+k6.exe
+
+# Claude Code
 .claude/
