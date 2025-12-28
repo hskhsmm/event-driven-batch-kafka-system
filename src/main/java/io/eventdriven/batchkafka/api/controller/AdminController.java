@@ -14,6 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/campaigns")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*", allowCredentials = "true")
 public class AdminController {
 
     private final CampaignService campaignService;
