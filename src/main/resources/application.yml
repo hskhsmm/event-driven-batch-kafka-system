@@ -13,5 +13,17 @@ spring:
     virtual:
       enabled: true
 
+  # HTTP 응답 인코딩 설정 (한글 깨짐 방지)
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+  # Jackson 타임존 설정 (서버 시간 맞추기)
+  jackson:
+    time-zone: Asia/Seoul
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+
   kafka:
     bootstrap-servers: localhost:9092
