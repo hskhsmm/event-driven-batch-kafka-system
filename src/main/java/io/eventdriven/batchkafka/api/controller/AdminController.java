@@ -1,5 +1,6 @@
 package io.eventdriven.batchkafka.api.controller;
 
+import io.eventdriven.batchkafka.api.common.ApiResponse;
 import io.eventdriven.batchkafka.api.dto.request.CampaignCreateRequest;
 import io.eventdriven.batchkafka.api.dto.response.CampaignResponse;
 import io.eventdriven.batchkafka.application.service.CampaignService;
@@ -18,13 +19,17 @@ public class AdminController {
     private final CampaignService campaignService;
 
     @PostMapping
-    public ResponseEntity<CampaignResponse> createCampaign(@RequestBody @Valid CampaignCreateRequest request) {
+    public ResponseEntity<ApiResponse<CampaignResponse>> createCampaign(@RequestBody @Valid CampaignCreateRequest request) {
         CampaignResponse response = campaignService.createCampaign(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                ApiResponse.success("캠페인이 생성되었습니다.", response)
+        );
     }
 
     @GetMapping
-    public ResponseEntity<List<CampaignResponse>> getCampaigns() {
-        return ResponseEntity.ok(campaignService.getCampaigns());
+    public ResponseEntity<ApiResponse<List<CampaignResponse>>> getCampaigns() {
+        return ResponseEntity.ok(
+                ApiResponse.success(campaignService.getCampaigns())
+        );
     }
 }
