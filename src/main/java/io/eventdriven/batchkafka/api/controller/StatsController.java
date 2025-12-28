@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/stats")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowCredentials = "true")
 public class StatsController {
 
     private final CampaignStatsRepository statsRepository;

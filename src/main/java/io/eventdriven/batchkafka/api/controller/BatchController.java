@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/batch")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowCredentials = "true")
 @SuppressWarnings("removal")
 public class BatchController {
 
