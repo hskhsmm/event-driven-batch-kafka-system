@@ -2,7 +2,11 @@ services:
   mysql:
     image: mysql:8.0
     container_name: mysql
-    command: --default-authentication-plugin=mysql_native_password
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+09:00
     ports:
       - "${MYSQL_PORT}:3306"
     environment:
@@ -82,6 +86,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TZ: Asia/Seoul
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
     ports:
       - "8080:8080"
     networks:
