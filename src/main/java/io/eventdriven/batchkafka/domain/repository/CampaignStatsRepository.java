@@ -36,4 +36,10 @@ public interface CampaignStatsRepository extends JpaRepository<CampaignStats, Lo
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
+
+    /**
+     * 특정 날짜에 집계 데이터가 있는지 확인
+     * - 배치 중복 실행 방지용
+     */
+    boolean existsByStatsDate(LocalDate statsDate);
 }
