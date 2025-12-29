@@ -1,0 +1,40 @@
+name: Deploy via CodeDeploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Zip deployment bundle
+        run: |
+          zip -r deploy.zip \
+            appspec.yml \
+            deploy/
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp deploy.zip \
+            s3://${{ vars.CODEDEPLOY_S3_BUCKET }}/deploy-${{ github.sha }}.zip
+
+      - name: Trigger CodeDeploy
+        run: |
+          aws deploy create-deployment \
+            --application-name ${{ vars.CODEDEPLOY_APP_NAME }} \
+            --deployment-group-name ${{ vars.CODEDEPLOY_DEPLOYMENT_GROUP }} \
+            --deployment-config-name CodeDeployDefault.AllAtOnce \
+            --s3-location bucket=${{ vars.CODEDEPLOY_S3_BUCKET }},key=deploy-${{ github.sha }}.zip,bundleType=zip
