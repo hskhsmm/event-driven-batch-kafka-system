@@ -1,6 +1,9 @@
 package io.eventdriven.batchkafka.api.controller;
 
 import io.eventdriven.batchkafka.api.common.ApiResponse;
+import io.eventdriven.batchkafka.api.exception.business.BatchAlreadyExecutedException;
+import io.eventdriven.batchkafka.api.exception.business.InvalidDateRangeException;
+import io.eventdriven.batchkafka.domain.repository.CampaignStatsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.job.*;
@@ -35,6 +38,7 @@ public class BatchController {
     private final JobLauncher asyncJobLauncher;
     private final Job aggregateParticipationJob;
     private final JobExplorer jobExplorer;
+    private final CampaignStatsRepository campaignStatsRepository;
 
     /**
      * 참여 이력 집계 배치 실행
@@ -214,16 +218,16 @@ public class BatchController {
     }
 
     /**
-     * 날짜 유효성 검증
+     * 날짜 유효성 검증 및 중복 실행 방지
      */
     private void validateDate(LocalDate date) {
         if (date == null) {
-            throw new IllegalArgumentException("날짜는 필수 파라미터입니다.");
+            throw new InvalidDateRangeException("날짜는 필수 파라미터입니다.");
         }
 
         // 미래 날짜 체크
         if (date.isAfter(LocalDate.now())) {
-            throw new IllegalArgumentException(
+            throw new InvalidDateRangeException(
                     String.format("미래 날짜는 집계할 수 없습니다. (입력: %s, 현재: %s)",
                             date.format(DateTimeFormatter.ISO_DATE),
                             LocalDate.now().format(DateTimeFormatter.ISO_DATE))
@@ -232,10 +236,16 @@ public class BatchController {
 
         // 너무 오래된 날짜 체크 (1년 이상 과거)
         if (date.isBefore(LocalDate.now().minusYears(1))) {
-            throw new IllegalArgumentException(
+            throw new InvalidDateRangeException(
                     String.format("1년 이상 과거 날짜는 집계할 수 없습니다. (입력: %s)",
                             date.format(DateTimeFormatter.ISO_DATE))
             );
+        }
+
+        //  중복 실행 방지: 이미 집계된 날짜인지 확인
+        if (campaignStatsRepository.existsByStatsDate(date)) {
+            log.warn("⚠️ 배치 중복 실행 시도 - 날짜: {}는 이미 집계되었습니다.", date);
+            throw new BatchAlreadyExecutedException(date);
         }
     }
 }
