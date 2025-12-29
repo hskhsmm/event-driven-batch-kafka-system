@@ -1,5 +1,6 @@
 package io.eventdriven.batchkafka.batch;
 
+import io.eventdriven.batchkafka.application.service.CampaignAggregationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.step.StepContribution;
@@ -21,14 +22,20 @@ import java.util.Map;
  * 참여 이력 집계 Tasklet
  * - participation_history → campaign_stats 집계
  * - 일자별, 캠페인별 성공/실패 건수 통계
+ * - 개별 캠페인별로 독립적인 트랜잭션 처리 (REQUIRES_NEW)
  */
 @Slf4j
 class AggregateParticipationTasklet implements Tasklet {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final CampaignAggregationService campaignAggregationService;
 
-    AggregateParticipationTasklet(NamedParameterJdbcTemplate jdbcTemplate) {
+    AggregateParticipationTasklet(
+            NamedParameterJdbcTemplate jdbcTemplate,
+            CampaignAggregationService campaignAggregationService
+    ) {
         this.jdbcTemplate = jdbcTemplate;
+        this.campaignAggregationService = campaignAggregationService;
     }
 
     @Override
@@ -99,21 +106,21 @@ class AggregateParticipationTasklet implements Tasklet {
 
             log.info("📊 집계 대상 캠페인: {} 개 - {}", campaignIds.size(), campaignIds);
 
-            // 3. 캠페인별 순차 집계 (작은 트랜잭션으로 분할)
+            // 3. 캠페인별 순차 집계 (독립 트랜잭션으로 처리)
             int totalUpdated = 0;
             int successCount = 0;
             int failureCount = 0;
 
             for (Long campaignId : campaignIds) {
                 try {
-                    int updated = aggregateByCampaign(campaignId, start, end);
+                    // REQUIRES_NEW 트랜잭션으로 개별 캠페인 집계
+                    int updated = campaignAggregationService.aggregateByCampaign(campaignId, start, end);
                     totalUpdated += updated;
                     successCount++;
-                    log.debug("  ✓ 캠페인 {} 집계 완료 - {} 행 업데이트", campaignId, updated);
-                } catch (DataAccessException e) {
+                } catch (Exception e) {
+                    // 개별 캠페인 실패는 독립 트랜잭션이므로 다른 캠페인에 영향 없음
                     failureCount++;
-                    log.error("  ✗ 캠페인 {} 집계 실패", campaignId, e);
-                    // 개별 캠페인 실패는 로깅만 하고 계속 진행
+                    log.error("  ✗ 캠페인 {} 집계 실패 (독립 트랜잭션 롤백)", campaignId, e);
                 }
             }
 
@@ -158,40 +165,6 @@ class AggregateParticipationTasklet implements Tasklet {
                     .addExitDescription("예상치 못한 오류: " + e.getMessage()));
             throw new RuntimeException("집계 중 예상치 못한 오류가 발생했습니다.", e);
         }
-    }
-
-    /**
-     * 캠페인별 집계 실행
-     * - 작은 단위로 트랜잭션 분할하여 성능 최적화
-     * - 개별 캠페인 실패 시에도 다른 캠페인 집계 계속 진행
-     *
-     * @param campaignId 캠페인 ID
-     * @param start 집계 시작 시간
-     * @param end 집계 종료 시간
-     * @return 업데이트된 행 수
-     */
-    private int aggregateByCampaign(Long campaignId, LocalDateTime start, LocalDateTime end) {
-        String sql = """
-                INSERT INTO campaign_stats (campaign_id, success_count, fail_count, stats_date)
-                SELECT :campaignId,
-                       SUM(CASE WHEN p.status = 'SUCCESS' THEN 1 ELSE 0 END) AS success_count,
-                       SUM(CASE WHEN p.status = 'FAIL' THEN 1 ELSE 0 END)    AS fail_count,
-                       DATE(:start)                                          AS stats_date
-                FROM participation_history p
-                WHERE p.campaign_id = :campaignId
-                  AND p.created_at >= :start
-                  AND p.created_at < :end
-                ON DUPLICATE KEY UPDATE
-                  success_count = VALUES(success_count),
-                  fail_count    = VALUES(fail_count)
-                """;
-
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("campaignId", campaignId)
-                .addValue("start", start)
-                .addValue("end", end);
-
-        return jdbcTemplate.update(sql, params);
     }
 }
 
