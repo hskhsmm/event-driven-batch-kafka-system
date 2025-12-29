@@ -20,17 +20,53 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # 1. ECR 로그인
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ vars.AWS_REGION }} \
+            | docker login --username AWS --password-stdin \
+              ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+
+      # 2. Docker 이미지 빌드
+      - name: Build Docker image
+        run: |
+          docker build -t batch-kafka:${{ github.sha }} .
+
+      # 3. ECR 태그
+      - name: Tag Docker image
+        run: |
+          docker tag batch-kafka:${{ github.sha }} \
+            ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+
+      # 4. ECR Push
+      - name: Push Docker image to ECR
+        run: |
+          docker push \
+            ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+
+      # 5. SSM에 최신 이미지 태그 저장
+      - name: Update SSM ECR_IMAGE parameter
+        run: |
+          aws ssm put-parameter \
+            --name "/batch-kafka/prod/ECR_IMAGE" \
+            --value "${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}" \
+            --type String \
+            --overwrite
+
+      # 6. CodeDeploy 번들 zip 생성
       - name: Zip deployment bundle
         run: |
           zip -r deploy.zip \
             appspec.yml \
             deploy/
 
+      # 7. S3 업로드
       - name: Upload to S3
         run: |
           aws s3 cp deploy.zip \
             s3://${{ vars.CODEDEPLOY_S3_BUCKET }}/deploy-${{ github.sha }}.zip
 
+      # 8. CodeDeploy 트리거
       - name: Trigger CodeDeploy
         run: |
           aws deploy create-deployment \
