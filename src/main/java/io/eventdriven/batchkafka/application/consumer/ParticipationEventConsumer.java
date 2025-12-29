@@ -1,6 +1,5 @@
 package io.eventdriven.batchkafka.application.consumer;
 
-import tools.jackson.core.JsonProcessingException;
 import tools.jackson.databind.json.JsonMapper;
 import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundException;
 import io.eventdriven.batchkafka.api.exception.infrastructure.DatabaseException;
@@ -67,10 +66,10 @@ public class ParticipationEventConsumer {
                         event.getCampaignId(), event.getUserId());
                 return;
 
-            } catch (JsonProcessingException e) {
-                // JSON 파싱 오류 = 영구 오류 (재시도 불필요)
-                log.error("❌ JSON 파싱 실패 - DLQ로 전송: {}", message, e);
-                sendToDlq(message, "JSON_PARSING_ERROR", e);
+            } catch (IllegalArgumentException e) {
+                // JSON 파싱 오류 또는 비즈니스 로직 오류 = 영구 오류 (재시도 불필요)
+                log.error("❌ JSON/비즈니스 오류 - DLQ로 전송: {}", message, e);
+                sendToDlq(message, "JSON_OR_BUSINESS_ERROR", e);
                 acknowledgment.acknowledge();  // 원본 큐에서는 제거
                 return;
 
@@ -78,13 +77,6 @@ public class ParticipationEventConsumer {
                 // 캠페인 없음 = 영구 오류 (재시도 불필요)
                 log.error("❌ 캠페인 없음 - DLQ로 전송: {}", message, e);
                 sendToDlq(message, "CAMPAIGN_NOT_FOUND", e);
-                acknowledgment.acknowledge();
-                return;
-
-            } catch (IllegalArgumentException e) {
-                // 비즈니스 로직 오류 = 영구 오류
-                log.error("❌ 비즈니스 오류 - DLQ로 전송: {}", message, e);
-                sendToDlq(message, "BUSINESS_ERROR", e);
                 acknowledgment.acknowledge();
                 return;
 
@@ -120,8 +112,12 @@ public class ParticipationEventConsumer {
     /**
      * 메시지 파싱
      */
-    private ParticipationEvent parseMessage(String message) throws JsonProcessingException {
-        return jsonMapper.readValue(message, ParticipationEvent.class);
+    private ParticipationEvent parseMessage(String message) {
+        try {
+            return jsonMapper.readValue(message, ParticipationEvent.class);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("JSON 파싱 실패: " + message, e);
+        }
     }
 
     /**

@@ -1,6 +1,5 @@
 package io.eventdriven.batchkafka.application.service;
 
-import tools.jackson.core.JsonProcessingException;
 import tools.jackson.databind.json.JsonMapper;
 import io.eventdriven.batchkafka.api.exception.infrastructure.KafkaPublishException;
 import io.eventdriven.batchkafka.api.exception.infrastructure.KafkaSerializationException;
@@ -51,7 +50,7 @@ public class ParticipationService {
                 }
             });
 
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             // JSON 직렬화 실패
             log.error("🚨 JSON 직렬화 실패 - Campaign ID: {}, User ID: {}", campaignId, userId, e);
             throw new KafkaSerializationException(e);
