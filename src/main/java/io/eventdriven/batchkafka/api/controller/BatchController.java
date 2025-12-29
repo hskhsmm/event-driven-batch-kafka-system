@@ -3,6 +3,7 @@ package io.eventdriven.batchkafka.api.controller;
 import io.eventdriven.batchkafka.api.common.ApiResponse;
 import io.eventdriven.batchkafka.api.exception.business.BatchAlreadyExecutedException;
 import io.eventdriven.batchkafka.api.exception.business.InvalidDateRangeException;
+import io.eventdriven.batchkafka.config.BatchProperties;
 import io.eventdriven.batchkafka.domain.repository.CampaignStatsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,7 @@ public class BatchController {
     private final Job aggregateParticipationJob;
     private final JobExplorer jobExplorer;
     private final CampaignStatsRepository campaignStatsRepository;
+    private final BatchProperties batchProperties;
 
     /**
      * 참여 이력 집계 배치 실행
@@ -234,10 +236,12 @@ public class BatchController {
             );
         }
 
-        // 너무 오래된 날짜 체크 (1년 이상 과거)
-        if (date.isBefore(LocalDate.now().minusYears(1))) {
+        // 너무 오래된 날짜 체크
+        int maxPastYears = batchProperties.getAggregation().getMaxPastYears();
+        if (date.isBefore(LocalDate.now().minusYears(maxPastYears))) {
             throw new InvalidDateRangeException(
-                    String.format("1년 이상 과거 날짜는 집계할 수 없습니다. (입력: %s)",
+                    String.format("%d년 이상 과거 날짜는 집계할 수 없습니다. (입력: %s)",
+                            maxPastYears,
                             date.format(DateTimeFormatter.ISO_DATE))
             );
         }
