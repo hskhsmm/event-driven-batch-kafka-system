@@ -2,9 +2,12 @@ version: "3.8"
 
 services:
   app:
+    # ECR image reference is provided by CodeDeploy hook via ECR_IMAGE env var
     image: ${ECR_IMAGE}
+    container_name: batch-kafka-app
     ports:
       - "8080:8080"
     env_file:
       - /opt/batch-kafka/.env.prod
     restart: unless-stopped
+
