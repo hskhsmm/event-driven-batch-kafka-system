@@ -2,7 +2,7 @@
 FROM eclipse-temurin:25-jdk AS build
 WORKDIR /app
 
-# gradle wrapper 먼저 복사
+# gradle wrapper만 먼저 복사
 COPY gradlew .
 COPY gradle gradle
 RUN chmod +x gradlew
@@ -11,8 +11,11 @@ RUN chmod +x gradlew
 COPY build.gradle* settings.gradle* ./
 RUN ./gradlew dependencies --no-daemon || true
 
-# 나머지 소스
-COPY . .
+# ⚠️ 나머지 소스 복사 (gradlew 제외됨)
+COPY src src
+COPY docker docker
+# 필요하면 다른 디렉터리도 명시적으로 추가
+
 RUN ./gradlew clean bootJar --no-daemon
 
 # 2. Run stage
