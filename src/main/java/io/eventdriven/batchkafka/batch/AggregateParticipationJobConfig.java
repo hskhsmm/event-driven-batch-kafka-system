@@ -1,6 +1,7 @@
 package io.eventdriven.batchkafka.batch;
 
 
+import io.eventdriven.batchkafka.application.service.CampaignAggregationService;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -16,8 +17,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 public class AggregateParticipationJobConfig {
 
     @Bean
-    public Tasklet aggregateByWindowTasklet(NamedParameterJdbcTemplate jdbcTemplate) {
-        return new AggregateParticipationTasklet(jdbcTemplate);
+    public Tasklet aggregateByWindowTasklet(
+            NamedParameterJdbcTemplate jdbcTemplate,
+            CampaignAggregationService campaignAggregationService
+    ) {
+        return new AggregateParticipationTasklet(jdbcTemplate, campaignAggregationService);
     }
 
     @Bean
