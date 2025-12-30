@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -26,9 +27,87 @@ import java.util.stream.Collectors;
 public class StatsController {
 
     private final CampaignStatsRepository statsRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
-     * 특정 날짜의 전체 캠페인 통계 조회
+     * 원본 데이터 직접 집계 (배치 없이 - 느린 API, 성능 비교용)
+     * GET /api/admin/stats/raw?date=2025-12-26
+     */
+    @GetMapping("/raw")
+    public ResponseEntity<ApiResponse<?>> getRawStats(
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        try {
+            long startTime = System.currentTimeMillis();
+
+            // 배치 없이 원본 테이블에서 직접 집계 (느림!)
+            String sql = """
+                SELECT
+                    c.id as campaign_id,
+                    c.name as campaign_name,
+                    COALESCE(SUM(CASE WHEN p.status = 'SUCCESS' THEN 1 ELSE 0 END), 0) as success_count,
+                    COALESCE(SUM(CASE WHEN p.status = 'FAIL' THEN 1 ELSE 0 END), 0) as fail_count,
+                    COALESCE(COUNT(p.id), 0) as total_count
+                FROM campaign c
+                LEFT JOIN participation_history p ON c.id = p.campaign_id AND DATE(p.created_at) = ?
+                GROUP BY c.id, c.name
+                HAVING total_count > 0
+            """;
+
+            List<Map<String, Object>> campaigns = jdbcTemplate.query(sql,
+                (rs, rowNum) -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("campaignId", rs.getLong("campaign_id"));
+                    item.put("campaignName", rs.getString("campaign_name"));
+                    item.put("successCount", rs.getLong("success_count"));
+                    item.put("failCount", rs.getLong("fail_count"));
+                    item.put("totalCount", rs.getLong("total_count"));
+                    long success = rs.getLong("success_count");
+                    long total = rs.getLong("total_count");
+                    item.put("successRate", total > 0 ?
+                        String.format("%.2f%%", (success * 100.0 / total)) : "0.00%");
+                    return item;
+                },
+                java.sql.Date.valueOf(date)
+            );
+
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+
+            // 전체 집계
+            long totalSuccess = campaigns.stream()
+                .mapToLong(c -> ((Number) c.get("successCount")).longValue()).sum();
+            long totalFail = campaigns.stream()
+                .mapToLong(c -> ((Number) c.get("failCount")).longValue()).sum();
+            long totalCount = totalSuccess + totalFail;
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("date", date.toString());
+            data.put("method", "RAW_QUERY");
+            data.put("queryTimeMs", duration);  // 쿼리 실행 시간
+            data.put("summary", Map.of(
+                    "totalCampaigns", campaigns.size(),
+                    "totalSuccess", totalSuccess,
+                    "totalFail", totalFail,
+                    "totalParticipation", totalCount,
+                    "overallSuccessRate", totalCount > 0 ?
+                            String.format("%.2f%%", (totalSuccess * 100.0 / totalCount)) : "0.00%"
+            ));
+            data.put("campaigns", campaigns);
+
+            log.info("📊 원본 집계 완료 - date: {}, queryTime: {}ms", date, duration);
+
+            return ResponseEntity.ok(ApiResponse.success(data));
+
+        } catch (Exception e) {
+            log.error("🚨 원본 통계 조회 실패 - date: {}", date, e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.fail("통계 조회 중 오류가 발생했습니다."));
+        }
+    }
+
+    /**
+     * 특정 날짜의 전체 캠페인 통계 조회 (배치 집계 후 - 빠른 API)
      * GET /api/admin/stats/daily?date=2025-12-26
      */
     @GetMapping("/daily")
@@ -36,13 +115,19 @@ public class StatsController {
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         try {
+            long startTime = System.currentTimeMillis();
+
             List<CampaignStats> stats = statsRepository.findByStatsDate(date);
 
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+
             if (stats.isEmpty()) {
-                Map<String, Object> emptyData = Map.of(
-                        "date", date.toString(),
-                        "campaigns", List.of()
-                );
+                Map<String, Object> emptyData = new HashMap<>();
+                emptyData.put("date", date.toString());
+                emptyData.put("method", "BATCH_AGGREGATED");
+                emptyData.put("queryTimeMs", duration);
+                emptyData.put("campaigns", List.of());
                 return ResponseEntity.ok(
                         ApiResponse.success("해당 날짜의 집계 데이터가 없습니다. 배치를 먼저 실행해주세요.", emptyData)
                 );
@@ -70,6 +155,8 @@ public class StatsController {
 
             Map<String, Object> data = new HashMap<>();
             data.put("date", date.toString());
+            data.put("method", "BATCH_AGGREGATED");
+            data.put("queryTimeMs", duration);  // 쿼리 실행 시간
             data.put("summary", Map.of(
                     "totalCampaigns", stats.size(),
                     "totalSuccess", totalSuccess,
@@ -79,6 +166,8 @@ public class StatsController {
                             String.format("%.2f%%", (totalSuccess * 100.0 / totalCount)) : "0.00%"
             ));
             data.put("campaigns", campaigns);
+
+            log.info("📊 배치 집계 조회 완료 - date: {}, queryTime: {}ms", date, duration);
 
             return ResponseEntity.ok(ApiResponse.success(data));
 
