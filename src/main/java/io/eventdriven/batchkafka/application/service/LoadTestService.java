@@ -41,8 +41,10 @@ public class LoadTestService {
                 .build();
         testResults.put(jobId, initialResult);
 
-        // 비동기 실행
-        executeK6TestAsync(jobId, request, "kafka");
+        // 비동기 실행 (CompletableFuture 사용하여 self-invocation 문제 해결)
+        java.util.concurrent.CompletableFuture.runAsync(() ->
+            executeK6TestAsync(jobId, request, "kafka")
+        );
 
         return jobId;
     }
@@ -62,8 +64,10 @@ public class LoadTestService {
                 .build();
         testResults.put(jobId, initialResult);
 
-        // 비동기 실행
-        executeK6TestAsync(jobId, request, "sync");
+        // 비동기 실행 (CompletableFuture 사용하여 self-invocation 문제 해결)
+        java.util.concurrent.CompletableFuture.runAsync(() ->
+            executeK6TestAsync(jobId, request, "sync")
+        );
 
         return jobId;
     }
@@ -76,9 +80,8 @@ public class LoadTestService {
     }
 
     /**
-     * K6 테스트 비동기 실행
+     * K6 테스트 실행 (CompletableFuture로 비동기 실행됨)
      */
-    @Async
     protected void executeK6TestAsync(String jobId, LoadTestRequest request, String testType) {
         try {
             log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}",
@@ -173,13 +176,52 @@ public class LoadTestService {
     private LoadTestMetrics parseK6Output(String output) {
         LoadTestMetrics.LoadTestMetricsBuilder builder = LoadTestMetrics.builder();
 
-        // http_req_duration 메트릭 파싱
-        Pattern durationPattern = Pattern.compile("http_req_duration.*?avg=(\\d+\\.?\\d*)ms.*?p\\(95\\)=(\\d+\\.?\\d*)ms.*?p\\(99\\)=(\\d+\\.?\\d*)ms");
-        Matcher durationMatcher = durationPattern.matcher(output);
-        if (durationMatcher.find()) {
-            builder.avg(Double.parseDouble(durationMatcher.group(1)));
-            builder.p95(Double.parseDouble(durationMatcher.group(2)));
-            builder.p99(Double.parseDouble(durationMatcher.group(3)));
+        // http_req_duration 라인 찾기
+        Pattern linePattern = Pattern.compile("http_req_duration.*");
+        Matcher lineMatcher = linePattern.matcher(output);
+
+        if (lineMatcher.find()) {
+            String durationLine = lineMatcher.group();
+
+            // avg 파싱
+            Pattern avgPattern = Pattern.compile("avg=(\\d+\\.?\\d*)(ms|s|µs|m)");
+            Matcher avgMatcher = avgPattern.matcher(durationLine);
+            if (avgMatcher.find()) {
+                builder.avg(convertToMs(avgMatcher.group(1), avgMatcher.group(2)));
+            }
+
+            // p(95) 파싱
+            Pattern p95Pattern = Pattern.compile("p\\(95\\)=(\\d+\\.?\\d*)(ms|s|µs|m)");
+            Matcher p95Matcher = p95Pattern.matcher(durationLine);
+            if (p95Matcher.find()) {
+                builder.p95(convertToMs(p95Matcher.group(1), p95Matcher.group(2)));
+            }
+
+            // p(99) 파싱 (optional)
+            Pattern p99Pattern = Pattern.compile("p\\(99\\)=(\\d+\\.?\\d*)(ms|s|µs|m)");
+            Matcher p99Matcher = p99Pattern.matcher(durationLine);
+            if (p99Matcher.find()) {
+                builder.p99(convertToMs(p99Matcher.group(1), p99Matcher.group(2)));
+            }
+
+            // max 파싱 (p99가 없으면 max 사용)
+            Pattern maxPattern = Pattern.compile("max=(\\d+\\.?\\d*)(ms|s|µs|m)");
+            Matcher maxMatcher = maxPattern.matcher(durationLine);
+            if (maxMatcher.find()) {
+                double maxValue = convertToMs(maxMatcher.group(1), maxMatcher.group(2));
+                builder.max(maxValue);
+                // p99가 없으면 max를 p99로 사용
+                if (!p99Matcher.find()) {
+                    builder.p99(maxValue);
+                }
+            }
+
+            // min 파싱
+            Pattern minPattern = Pattern.compile("min=(\\d+\\.?\\d*)(ms|s|µs|m)");
+            Matcher minMatcher = minPattern.matcher(durationLine);
+            if (minMatcher.find()) {
+                builder.min(convertToMs(minMatcher.group(1), minMatcher.group(2)));
+            }
         }
 
         // http_reqs 메트릭 파싱
@@ -197,11 +239,30 @@ public class LoadTestService {
             builder.failureRate(Double.parseDouble(failedMatcher.group(1)) / 100.0);
         }
 
-        // 기본값 설정 (파싱 실패 시)
-        return builder
-                .p50(builder.build().getAvg() != null ? builder.build().getAvg() * 0.9 : 50.0)
-                .min(10.0)
-                .max(builder.build().getP99() != null ? builder.build().getP99() * 1.2 : 200.0)
-                .build();
+        // p50 계산 (avg의 90%로 추정)
+        LoadTestMetrics temp = builder.build();
+        if (temp.getP50() == null && temp.getAvg() != null) {
+            builder.p50(temp.getAvg() * 0.9);
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * K6 시간 단위를 밀리초로 변환
+     */
+    private double convertToMs(String value, String unit) {
+        double numValue = Double.parseDouble(value);
+        switch (unit) {
+            case "s":
+                return numValue * 1000; // 초 → 밀리초
+            case "m":
+                return numValue * 60 * 1000; // 분 → 밀리초
+            case "µs":
+                return numValue / 1000; // 마이크로초 → 밀리초
+            case "ms":
+            default:
+                return numValue; // 이미 밀리초
+        }
     }
 }
