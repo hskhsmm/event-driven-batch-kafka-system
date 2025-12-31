@@ -90,9 +90,12 @@ public class ParticipationController {
                 .orElseThrow(() -> new CampaignNotFoundException(id));
 
         // 실시간 집계 (participation_history에서)
-        Object[] counts = participationHistoryRepository.countStatusByCampaignId(id);
-        Long successCount = counts != null && counts.length > 0 ? ((Number) counts[0]).longValue() : 0L;
-        Long failCount = counts != null && counts.length > 1 ? ((Number) counts[1]).longValue() : 0L;
+        Long successCount = participationHistoryRepository.countSuccessByCampaignId(id);
+        Long failCount = participationHistoryRepository.countFailByCampaignId(id);
+
+        // null 체크 (데이터가 없을 경우 대비)
+        successCount = successCount != null ? successCount : 0L;
+        failCount = failCount != null ? failCount : 0L;
         Long totalCount = successCount + failCount;
 
         Map<String, Object> data = new HashMap<>();
