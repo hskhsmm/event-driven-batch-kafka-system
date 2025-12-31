@@ -14,14 +14,22 @@ public interface ParticipationHistoryRepository extends JpaRepository<Participat
     Long countByCampaignIdAndStatus(Long campaignId, ParticipationStatus status);
 
     /**
-     * 캠페인별 성공/실패 건수 한 번에 조회 (더 효율적)
+     * 캠페인별 성공 건수 조회
      */
     @Query("""
-        SELECT
-            COALESCE(SUM(CASE WHEN ph.status = 'SUCCESS' THEN 1 ELSE 0 END), 0) as successCount,
-            COALESCE(SUM(CASE WHEN ph.status = 'FAIL' THEN 1 ELSE 0 END), 0) as failCount
+        SELECT COUNT(ph)
         FROM ParticipationHistory ph
-        WHERE ph.campaign.id = :campaignId
+        WHERE ph.campaign.id = :campaignId AND ph.status = 'SUCCESS'
     """)
-    Object[] countStatusByCampaignId(@Param("campaignId") Long campaignId);
+    Long countSuccessByCampaignId(@Param("campaignId") Long campaignId);
+
+    /**
+     * 캠페인별 실패 건수 조회
+     */
+    @Query("""
+        SELECT COUNT(ph)
+        FROM ParticipationHistory ph
+        WHERE ph.campaign.id = :campaignId AND ph.status = 'FAIL'
+    """)
+    Long countFailByCampaignId(@Param("campaignId") Long campaignId);
 }
