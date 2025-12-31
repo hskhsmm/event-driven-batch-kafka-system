@@ -84,10 +84,10 @@ public class LoadTestService {
             log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}",
                     jobId, testType, request.getCampaignId());
 
-            // K6 스크립트 경로 (프로젝트 루트 기준)
+            // K6 스크립트 경로 (Docker 컨테이너 /app 기준)
             String scriptPath = testType.equals("kafka")
-                    ? "k6-load-test.js"
-                    : "k6-sync-test.js";
+                    ? "/app/k6-load-test.js"
+                    : "/app/k6-sync-test.js";
 
             // ProcessBuilder로 K6 실행
             ProcessBuilder processBuilder = new ProcessBuilder(
@@ -133,7 +133,9 @@ public class LoadTestService {
                         jobId, metrics.getThroughput(), metrics.getP95());
 
             } else {
-                // 실패
+                // 실패: 에러 출력 로그에 남기기
+                String errorOutput = output.toString();
+
                 LoadTestResult result = LoadTestResult.builder()
                         .jobId(jobId)
                         .method(testType.toUpperCase())
@@ -146,6 +148,7 @@ public class LoadTestService {
                 testResults.put(jobId, result);
 
                 log.error("❌ K6 테스트 실패 - JobID: {}, ExitCode: {}", jobId, exitCode);
+                log.error("K6 에러 출력:\n{}", errorOutput);
             }
 
         } catch (Exception e) {
