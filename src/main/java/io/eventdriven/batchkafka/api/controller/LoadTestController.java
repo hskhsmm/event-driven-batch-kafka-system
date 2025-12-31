@@ -67,7 +67,7 @@ public class LoadTestController {
      * GET /api/admin/load-test/results/{jobId}
      */
     @GetMapping("/results/{jobId}")
-    public ResponseEntity<ApiResponse<LoadTestResult>> getTestResult(
+    public ResponseEntity<ApiResponse<?>> getTestResult(
             @PathVariable String jobId
     ) {
         LoadTestResult result = loadTestService.getTestResult(jobId);
