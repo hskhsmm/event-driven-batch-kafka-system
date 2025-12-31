@@ -1,0 +1,124 @@
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+import { Counter } from 'k6/metrics';
+
+// 커스텀 메트릭
+const successCount = new Counter('participation_success');
+const failCount = new Counter('participation_fail');
+
+// 테스트 설정
+export const options = {
+  scenarios: {
+    // 시나리오 1: 100명이 1초 동안 동시 요청 (동기 방식 성능 테스트)
+    spike_test: {
+      executor: 'constant-arrival-rate',
+      rate: 100,           // 100개 요청
+      timeUnit: '1s',      // 1초 동안
+      duration: '5s',      // 5초간 지속
+      preAllocatedVUs: 100, // 미리 할당할 VU
+      maxVUs: 150,         // 최대 VU
+    },
+  },
+  thresholds: {
+    http_req_duration: ['p(95)<1000'], // 동기 방식이므로 더 느림 (1000ms)
+    http_req_failed: ['rate<0.5'],     // 실패율 50% 이하
+  },
+};
+
+const BASE_URL = 'http://localhost:8080';
+const CAMPAIGN_ID = __ENV.CAMPAIGN_ID || 1; // 환경변수로 캠페인 ID 전달 가능
+
+export default function () {
+  const userId = __VU; // Virtual User ID를 userId로 사용 (1~100)
+
+  const payload = JSON.stringify({
+    userId: userId,
+  });
+
+  const params = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  // 동기 방식 참여 요청 (Kafka 없이 바로 DB 처리)
+  const response = http.post(
+    `${BASE_URL}/api/campaigns/${CAMPAIGN_ID}/participation-sync`,
+    payload,
+    params
+  );
+
+  // 응답 검증
+  const isSuccess = check(response, {
+    'status is 200': (r) => r.status === 200,
+    'response has success field': (r) => {
+      try {
+        const body = JSON.parse(r.body);
+        return body.hasOwnProperty('success');
+      } catch (e) {
+        return false;
+      }
+    },
+    'response has method=SYNC': (r) => {
+      try {
+        const body = JSON.parse(r.body);
+        return body.data && body.data.method === 'SYNC';
+      } catch (e) {
+        return false;
+      }
+    },
+  });
+
+  // 성공/실패 카운트 (동기 방식이므로 즉시 결과 확인 가능)
+  if (response.status === 200) {
+    try {
+      const body = JSON.parse(response.body);
+      if (body.data && body.data.status === 'SUCCESS') {
+        successCount.add(1);
+      } else {
+        failCount.add(1);
+      }
+    } catch (e) {
+      failCount.add(1);
+    }
+  } else {
+    failCount.add(1);
+  }
+
+  // 응답 로그 (샘플링)
+  if (__VU % 10 === 0) {
+    console.log(`[VU ${__VU}] Status: ${response.status}, Body: ${response.body}`);
+  }
+}
+
+// 테스트 종료 후 요약
+export function handleSummary(data) {
+  return {
+    'stdout': JSON.stringify({
+      metrics: {
+        http_req_duration_p95: data.metrics.http_req_duration.values['p(95)'],
+        http_req_duration_avg: data.metrics.http_req_duration.values.avg,
+        http_reqs_total: data.metrics.http_reqs.values.count,
+        http_req_failed_rate: data.metrics.http_req_failed.values.rate,
+        participation_success: data.metrics.participation_success?.values.count || 0,
+        participation_fail: data.metrics.participation_fail?.values.count || 0,
+      },
+      summary: `
+========================================
+📊 동기 방식 부하 테스트 결과
+========================================
+총 요청 수: ${data.metrics.http_reqs.values.count}
+평균 응답 시간: ${data.metrics.http_req_duration.values.avg.toFixed(2)}ms
+95% 응답 시간: ${data.metrics.http_req_duration.values['p(95)'].toFixed(2)}ms
+실패율: ${(data.metrics.http_req_failed.values.rate * 100).toFixed(2)}%
+
+✅ 성공: ${data.metrics.participation_success?.values.count || 0}
+❌ 실패: ${data.metrics.participation_fail?.values.count || 0}
+
+⚠️  동기 방식은 Kafka 없이 바로 DB 처리하므로
+   즉시 결과를 확인할 수 있지만 성능이 느립니다.
+========================================
+      `,
+    }, null, 2),
+  };
+}
