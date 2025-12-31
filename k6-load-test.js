@@ -19,10 +19,7 @@ export const options = {
       maxVUs: 150,         // 최대 VU
     },
   },
-  thresholds: {
-    http_req_duration: ['p(95)<500'], // 95%의 요청이 500ms 이내
-    http_req_failed: ['rate<0.5'],    // 실패율 50% 이하 (재고 소진 정상)
-  },
+  // Threshold 제거: 성능 측정이 목적이므로 pass/fail 기준 불필요
 };
 
 const BASE_URL = 'http://localhost:8080';
@@ -74,31 +71,4 @@ export default function () {
   }
 }
 
-// 테스트 종료 후 요약
-export function handleSummary(data) {
-  return {
-    'stdout': JSON.stringify({
-      metrics: {
-        http_req_duration_p95: data.metrics.http_req_duration.values['p(95)'],
-        http_req_duration_avg: data.metrics.http_req_duration.values.avg,
-        http_reqs_total: data.metrics.http_reqs.values.count,
-        http_req_failed_rate: data.metrics.http_req_failed.values.rate,
-        participation_success: data.metrics.participation_success ? data.metrics.participation_success.values.count : 0,
-        participation_fail: data.metrics.participation_fail ? data.metrics.participation_fail.values.count : 0,
-      },
-      summary: `
-========================================
-📊 부하 테스트 결과
-========================================
-총 요청 수: ${data.metrics.http_reqs.values.count}
-평균 응답 시간: ${data.metrics.http_req_duration.values.avg.toFixed(2)}ms
-95% 응답 시간: ${data.metrics.http_req_duration.values['p(95)'].toFixed(2)}ms
-실패율: ${(data.metrics.http_req_failed.values.rate * 100).toFixed(2)}%
-
-⚠️  주의: Kafka 비동기 처리로 실제 성공/실패는
-   DB 또는 배치 집계 결과를 확인해야 합니다.
-========================================
-      `,
-    }, null, 2),
-  };
-}
+// K6 기본 summary 사용 (handleSummary 제거하여 백엔드 파서와 호환)

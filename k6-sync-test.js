@@ -19,10 +19,7 @@ export const options = {
       maxVUs: 150,         // 최대 VU
     },
   },
-  thresholds: {
-    http_req_duration: ['p(95)<1000'], // 동기 방식이므로 더 느림 (1000ms)
-    http_req_failed: ['rate<0.5'],     // 실패율 50% 이하
-  },
+  // Threshold 제거: 성능 측정이 목적이므로 pass/fail 기준 불필요
 };
 
 const BASE_URL = 'http://localhost:8080';
@@ -91,34 +88,4 @@ export default function () {
   }
 }
 
-// 테스트 종료 후 요약
-export function handleSummary(data) {
-  return {
-    'stdout': JSON.stringify({
-      metrics: {
-        http_req_duration_p95: data.metrics.http_req_duration.values['p(95)'],
-        http_req_duration_avg: data.metrics.http_req_duration.values.avg,
-        http_reqs_total: data.metrics.http_reqs.values.count,
-        http_req_failed_rate: data.metrics.http_req_failed.values.rate,
-        participation_success: data.metrics.participation_success ? data.metrics.participation_success.values.count : 0,
-        participation_fail: data.metrics.participation_fail ? data.metrics.participation_fail.values.count : 0,
-      },
-      summary: `
-========================================
-📊 동기 방식 부하 테스트 결과
-========================================
-총 요청 수: ${data.metrics.http_reqs.values.count}
-평균 응답 시간: ${data.metrics.http_req_duration.values.avg.toFixed(2)}ms
-95% 응답 시간: ${data.metrics.http_req_duration.values['p(95)'].toFixed(2)}ms
-실패율: ${(data.metrics.http_req_failed.values.rate * 100).toFixed(2)}%
-
-✅ 성공: ${data.metrics.participation_success ? data.metrics.participation_success.values.count : 0}
-❌ 실패: ${data.metrics.participation_fail ? data.metrics.participation_fail.values.count : 0}
-
-⚠️  동기 방식은 Kafka 없이 바로 DB 처리하므로
-   즉시 결과를 확인할 수 있지만 성능이 느립니다.
-========================================
-      `,
-    }, null, 2),
-  };
-}
+// K6 기본 summary 사용 (handleSummary 제거하여 백엔드 파서와 호환)
