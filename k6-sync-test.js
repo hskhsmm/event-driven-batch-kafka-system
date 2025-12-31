@@ -100,8 +100,8 @@ export function handleSummary(data) {
         http_req_duration_avg: data.metrics.http_req_duration.values.avg,
         http_reqs_total: data.metrics.http_reqs.values.count,
         http_req_failed_rate: data.metrics.http_req_failed.values.rate,
-        participation_success: data.metrics.participation_success?.values.count || 0,
-        participation_fail: data.metrics.participation_fail?.values.count || 0,
+        participation_success: data.metrics.participation_success ? data.metrics.participation_success.values.count : 0,
+        participation_fail: data.metrics.participation_fail ? data.metrics.participation_fail.values.count : 0,
       },
       summary: `
 ========================================
@@ -112,8 +112,8 @@ export function handleSummary(data) {
 95% 응답 시간: ${data.metrics.http_req_duration.values['p(95)'].toFixed(2)}ms
 실패율: ${(data.metrics.http_req_failed.values.rate * 100).toFixed(2)}%
 
-✅ 성공: ${data.metrics.participation_success?.values.count || 0}
-❌ 실패: ${data.metrics.participation_fail?.values.count || 0}
+✅ 성공: ${data.metrics.participation_success ? data.metrics.participation_success.values.count : 0}
+❌ 실패: ${data.metrics.participation_fail ? data.metrics.participation_fail.values.count : 0}
 
 ⚠️  동기 방식은 Kafka 없이 바로 DB 처리하므로
    즉시 결과를 확인할 수 있지만 성능이 느립니다.

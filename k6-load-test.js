@@ -83,8 +83,8 @@ export function handleSummary(data) {
         http_req_duration_avg: data.metrics.http_req_duration.values.avg,
         http_reqs_total: data.metrics.http_reqs.values.count,
         http_req_failed_rate: data.metrics.http_req_failed.values.rate,
-        participation_success: data.metrics.participation_success?.values.count || 0,
-        participation_fail: data.metrics.participation_fail?.values.count || 0,
+        participation_success: data.metrics.participation_success ? data.metrics.participation_success.values.count : 0,
+        participation_fail: data.metrics.participation_fail ? data.metrics.participation_fail.values.count : 0,
       },
       summary: `
 ========================================
