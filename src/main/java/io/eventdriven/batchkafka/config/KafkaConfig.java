@@ -28,6 +28,20 @@ public class KafkaConfig {
     public static final String TOPIC_NAME = "campaign-participation-topic";
 
     /**
+     * Kafka Admin 설정 - 주석 처리 (파티션 수동 관리로 변경)
+     * kafka-clients 4.1.1의 AdminClient OAuth 버그로 인해 자동 파티션 관리 비활성화
+     * 파티션은 Docker 명령어로 수동 관리:
+     * docker exec kafka kafka-topics --bootstrap-server kafka:29092 --alter --topic campaign-participation-topic --partitions <개수>
+     */
+    // @Bean
+    // public KafkaAdmin kafkaAdmin() {
+    //     Map<String, Object> configs = new HashMap<>();
+    //     configs.put("bootstrap.servers", bootstrapServers);
+    //     configs.put("security.protocol", "PLAINTEXT");
+    //     return new KafkaAdmin(configs);
+    // }
+
+    /**
      * Kafka Producer 설정
      * - Key: String (Campaign ID 등)
      * - Value: String (JSON 문자열)
