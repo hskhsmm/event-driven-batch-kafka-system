@@ -23,6 +23,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class LoadTestService {
 
+    private final KafkaTopicService kafkaTopicService;
+
     // 테스트 결과를 메모리에 저장 (실제 환경에서는 Redis 사용 권장)
     private final Map<String, LoadTestResult> testResults = new ConcurrentHashMap<>();
 
@@ -86,6 +88,12 @@ public class LoadTestService {
         try {
             log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}, TotalRequests: {}, Partitions: {}",
                     jobId, testType, request.getCampaignId(), request.getTotalRequests(), request.getPartitions());
+
+            // Kafka 테스트인 경우, 파티션 수 자동 조정
+            if (testType.equals("kafka")) {
+                int actualPartitions = kafkaTopicService.ensurePartitions(request.getPartitions());
+                log.info("🔧 Kafka 파티션 확인/조정 완료 - 실제 파티션 수: {}", actualPartitions);
+            }
 
             // 총 요청 수 기반으로 rate와 duration 계산
             K6Config config = calculateK6Config(request.getTotalRequests(), testType);
