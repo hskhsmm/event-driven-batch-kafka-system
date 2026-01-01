@@ -506,38 +506,345 @@ export default function () {
 ./k6.exe run k6-kafka-test.js > result-kafka.txt
 ```
 
-#### 결과 비교
+ ## 실험 1 K6 부하 테스트 실험 결과
 
-| 지표 | 동기 처리 | Kafka 처리 |
-|------|----------|-----------|
-| 평균 응답 시간 (p95) | _____ms | _____ms |
-| 총 처리 시간 | _____초 | _____초 |
-| 성공 요청 수 | _____ | _____ |
-| 실패 요청 수 | _____ | _____ |
-| 정합성 (재고 확인) | _____ | _____ |
+  > **실험 목적**: Kafka 비동기 처리와 동기 처리의 성능 차이를 정량적으로 측정하고 비교       
 
-**📸 스크린샷 첨부 위치**
+  ###  실험 설정
 
-<!-- 동기 방식 k6 결과 스크린샷 -->
-![동기 방식 테스트 결과](./docs/images/experiment1-sync.png)
+  | 항목 | 설정 값 |
+  |------|---------|
+  | 테스트 도구 | K6 v0.48.0 |
+  | 가상 사용자(VU) | 100명 |
+  | 목표 TPS | 100 req/s |
+  | 초기 재고 | 10000개 |
 
-<!-- Kafka 방식 k6 결과 스크린샷 -->
-![Kafka 방식 테스트 결과](./docs/images/experiment1-kafka.png)
+  ---
 
-<!-- 정합성 확인 SQL 결과 -->
-```sql
--- 재고 확인
-SELECT id, current_stock FROM campaign WHERE id = 1;
+  ###  테스트 전 - 초기 상태
 
--- 성공/실패 건수
-SELECT status, COUNT(*) as count
-FROM participation_history
-WHERE campaign_id = 1
-GROUP BY status;
+  <p align="center">
+    <img width="800" alt="테스트 전 재고 상태" src="https://github.com/user-attachments/assets/7a68bbd9-9deb-4c3c-b45c-bcfc6e682e58" />
+    <br/>
+    <em>캠페인 초기 재고: <strong>10000개</strong></em>
+  </p>
+
+  ---
+
+  ###  Kafka 비동기 방식 테스트
+
+  <p align="center">
+    <img width="900" alt="Kafka 테스트 실행 화면" src="https://github.com/user-attachments/assets/f56fbd18-63d8-4791-be92-0f15c789193e" />
+    <br/><br/>
+    <strong> Kafka 방식 K6 부하 테스트</strong>
+    <br/>
+    <em>실시간 진행률 표시 및 메트릭 수집</em>
+  </p>
+
+  ####  Kafka 테스트 결과
+
+  <table align="center">
+    <tr>
+      <td align="center"><strong>항목</strong></td>
+      <td align="center"><strong>측정값</strong></td>
+    </tr>
+    <tr>
+      <td>평균 응답시간</td>
+      <td><strong>15.36ms</strong></td>
+    </tr>
+    <tr>
+      <td>P95 응답시간</td>
+      <td><strong>77.97ms</strong></td>
+    </tr>
+    <tr>
+      <td>P99 응답시간</td>
+      <td><strong>243.17ms</strong></td>
+    </tr>
+    <tr>
+      <td>TPS (처리량)</td>
+      <td><strong>99.51 req/s</strong></td>
+    </tr>
+    <tr>
+      <td>총 요청 수</td>
+      <td><strong>501개</strong></td>
+    </tr>
+    <tr>
+      <td>실패율</td>
+      <td><strong>0.00%</strong></td>
+    </tr>
+  </table>
+
+  <p align="center">
+    <img width="800" alt="Kafka 테스트 후 재고" src="https://github.com/user-attachments/assets/15766b00-e8db-458f-950b-c639ffb21bd3" />
+    <br/>
+    <em>테스트 후 재고: <strong>9499개</strong> </em>
+  </p>
+
+  ---
+
+  ### 동기 방식 테스트
+
+  <table align="center">
+    <tr>
+      <td align="center" width="40%">
+        <img width="100%" src="https://github.com/user-attachments/assets/a3ce5742-5694-4429-82b7-bc1f2147c517" />
+        <br/>
+        <strong>동기 테스트 실행</strong>
+        <br/>
+        <em>즉시 DB 처리 방식</em>
+      </td>
+      <td align="center" width="60%">
+        <img width="100%" src="https://github.com/user-attachments/assets/c1932281-5bce-49b0-93c5-a14d72e96dff" />
+        <br/>
+        <strong>실시간 모니터링</strong>
+        <br/>
+        <em>진행 상황 추적</em>
+      </td>
+    </tr>
+  </table>
+
+  #### 동기 방식 테스트 결과
+
+  <table align="center">
+    <tr>
+      <td align="center"><strong>항목</strong></td>
+      <td align="center"><strong>측정값</strong></td>
+    </tr>
+    <tr>
+      <td>평균 응답시간</td>
+      <td><strong>4480.00ms</strong></td>
+    </tr>
+    <tr>
+      <td>P95 응답시간</td>
+      <td><strong>7500.00ms</strong></td>
+    </tr>
+    <tr>
+      <td>P99 응답시간</td>
+      <td><strong>7580.00ms</strong></td>
+    </tr>
+    <tr>
+      <td>TPS (처리량)</td>
+      <td><strong>20.91 req/s</strong></td>
+    </tr>
+    <tr>
+      <td>총 요청 수</td>
+      <td><strong>213개</strong></td>
+    </tr>
+    <tr>
+      <td>실패율</td>
+      <td><strong>0.00%</strong></td>
+    </tr>
+  </table>
+
+  <p align="center">
+    <img width="900" alt="동기 테스트 후 재고" src="https://github.com/user-attachments/assets/2b826b36-5e40-4c5c-907a-3cdc39c9fc77" />
+    <br/>
+    <em>동기 테스트 후 최종 재고 상태</em>
+  </p>
+
+  ---
+
+  ### 4️ 성능 비교 분석
+
+  <h3 align="center"> Kafka vs 동기 방식 성능 비교</h3>
+
+  <table align="center">
+    <tr>
+      <td align="center" width="50%">
+        <img width="100%" src="https://github.com/user-attachments/assets/0f04aeba-8117-40fc-a0f5-07b846ae607e" />
+        <br/><br/>
+        <strong> 종합 성능 비교</strong>
+        <br/>
+        <em>모든 메트릭에서 Kafka가 압도적 우위</em>
+      </td>
+      <td align="center" width="50%">
+        <img width="100%" src="https://github.com/user-attachments/assets/6a75970e-ff41-4b96-bff2-4a57c96efb57" />
+        <br/><br/>
+        <strong> 응답 시간 상세 비교</strong>
+        <br/>
+        <em>P50, P95, P99 레이턴시 분석</em>
+      </td>
+    </tr>
+  </table>
+
+  ####  핵심 성과 지표
+
+  <p align="center">
+    <img src="https://img.shields.io/badge/응답속도-291배_빠름-00C853?style=for-the-badge&logo=speedtest&logoColor=white" />
+    <img src="https://img.shields.io/badge/처리량-4.8배_향상-2196F3?style=for-the-badge&logo=chartdotjs&logoColor=white" />
+    <img src="https://img.shields.io/badge/평균지연-15.36ms-FF6F00?style=for-the-badge&logo=firebase&logoColor=white" />
+  </p>
+
+  <table align="center">
+    <thead>
+      <tr>
+        <th>메트릭</th>
+        <th>Kafka 방식</th>
+        <th>동기 방식</th>
+        <th>개선률</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>평균 응답시간</strong></td>
+        <td>15.36ms</td>
+        <td>4480.00ms</td>
+        <td><strong style="color: #00C853;">291배 빠름 </strong></td>
+      </tr>
+      <tr>
+        <td><strong>P50 응답시간</strong></td>
+        <td>13.82ms</td>
+        <td>4032.00ms</td>
+        <td><strong style="color: #00C853;">291배 빠름</strong></td>
+      </tr>
+      <tr>
+        <td><strong>P95 응답시간</strong></td>
+        <td>77.97ms</td>
+        <td>7500.00ms</td>
+        <td><strong style="color: #00C853;">96배 빠름</strong></td>
+      </tr>
+      <tr>
+        <td><strong>P99 응답시간</strong></td>
+        <td>243.17ms</td>
+        <td>7580.00ms</td>
+        <td><strong style="color: #00C853;">31배 빠름</strong></td>
+      </tr>
+      <tr>
+        <td><strong>처리량 (TPS)</strong></td>
+        <td>99.51 req/s</td>
+        <td>20.91 req/s</td>
+        <td><strong style="color: #2196F3;">4.8배 향상 </strong></td>
+      </tr>
+      <tr>
+        <td><strong>총 처리 요청</strong></td>
+        <td>501개</td>
+        <td>257개</td>
+        <td><strong style="color: #2196F3;">1.9배 더 많음</strong></td>
+      </tr>
+      <tr>
+        <td><strong>실패율</strong></td>
+        <td>0.00%</td>
+        <td>0.00%</td>
+        <td><strong style="color: #4CAF50;">동일 </strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  ####  상세 분석
+
+  <table align="center">
+    <tr>
+      <td width="50%" valign="top">
+        <h4> Kafka 비동기 방식</h4>
+        <ul>
+          <li><strong>평균 응답시간:</strong> 15.36ms</li>
+          <li><strong>중앙값 (P50):</strong> 13.82ms</li>
+          <li><strong>95% 응답시간:</strong> 77.97ms</li>
+          <li><strong>99% 응답시간:</strong> 243.17ms</li>
+          <li><strong>최대 응답시간:</strong> 243.17ms</li>
+          <li><strong>처리량:</strong> 99.51 req/s</li>
+          <li><strong>총 요청:</strong> 501개</li>
+        </ul>
+        <blockquote>
+           <strong>빠른 응답:</strong> Kafka에 메시지만 전송하고 즉시 반환<br/>
+           <strong>높은 처리량:</strong> 목표 TPS 100 달성 (99.51)<br/>
+           <strong>안정적 성능:</strong> P99도 243ms로 낮은 레이턴시 유지
+        </blockquote>
+      </td>
+      <td width="50%" valign="top">
+        <h4> 동기 방식</h4>
+        <ul>
+          <li><strong>평균 응답시간:</strong> 4480.00ms (4.5초)</li>
+          <li><strong>중앙값 (P50):</strong> 4032.00ms (4초)</li>
+          <li><strong>95% 응답시간:</strong> 7500.00ms (7.5초)</li>
+          <li><strong>99% 응답시간:</strong> 7580.00ms (7.6초)</li>
+          <li><strong>최대 응답시간:</strong> 7580.00ms (7.6초)</li>
+          <li><strong>처리량:</strong> 20.91 req/s</li>
+          <li><strong>총 요청:</strong> 257개</li>
+        </ul>
+        <blockquote>
+           <strong>느린 응답:</strong> DB 처리 완료까지 대기<br/>
+           <strong>낮은 처리량:</strong> 목표의 21%만 달성 (20.91/100)<br/>
+           <strong>성능 저하:</strong> P95부터 급격히 느려짐 (DB 락 경합)
+        </blockquote>
+      </td>
+    </tr>
+  </table>
+
+  #### 주요 인사이트
+
+  <table align="center">
+    <tr>
+      <td align="center" width="25%">
+        <h3></h3>
+        <strong>응답 속도</strong><br/>
+        <code>291배 개선</code><br/>
+        <small>4.5초 → 15ms</small>
+      </td>
+      <td align="center" width="25%">
+        <h3></h3>
+        <strong>처리량</strong><br/>
+        <code>4.8배 증가</code><br/>
+        <small>20.91 → 99.51 TPS</small>
+      </td>
+      <td align="center" width="25%">
+        <h3></h3>
+        <strong>P95 레이턴시</strong><br/>
+        <code>96배 개선</code><br/>
+        <small>7.5초 → 78ms</small>
+      </td>
+      <td align="center" width="25%">
+        <h3></h3>
+        <strong>안정성</strong><br/>
+        <code>0% 에러율</code><br/>
+        <small>모든 요청 성공</small>
+      </td>
+    </tr>
+  </table>
+
+  > **결론**: Kafka 비동기 처리 방식이 동기 방식 대비 **평균 291배 빠른 응답 속도**와 **4.8배 높은 처리량**을 달성.
+
+
+  ---
+
+  ### 5️ 데이터 정합성 검증
+
+  <p align="center">
+    <img width="900" alt="정합성 검증 SQL 결과" src="https://github.com/user-attachments/assets/70cd18e5-4e6c-451a-bbe7-411def43bcb4" />
+    <br/><br/>
+    <strong>데이터 정합성 검증 완료</strong>
+    <br/>
+    <em>재고 차감 및 참여 이력 정확성 확인</em>
+  </p>
+
+  #### 검증 SQL 쿼리
+
+  ```sql
+  -- 재고 확인
+  SELECT id, current_stock
+  FROM campaign
+  WHERE id = 1;
+
+  -- 성공/실패 건수 집계
+  SELECT status, COUNT(*) as count
+  FROM participation_history
+  WHERE campaign_id = 1
+  GROUP BY status;
+
 ```
-![정합성 검증 결과](./docs/images/experiment1-integrity.png)
+
+
+  ---
+   실험 결론
+
+  1. 성능: Kafka 비동기 처리가 압도적으로 우수
+  2. 처리량: 동일 시간 내 4.8배 더 많은 요청 처리 가능
+  3. 안정성: 높은 부하에서도 0% 에러율 
+  4. 정합성: 재고 차감 및 이력 기록의 정확성 검증 완료
+
 
 ---
+
 
 ### 실험 2: Kafka 파티션 개수에 따른 성능
 
