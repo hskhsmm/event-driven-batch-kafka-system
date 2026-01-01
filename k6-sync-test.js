@@ -9,12 +9,12 @@ const failCount = new Counter('participation_fail');
 // 테스트 설정
 export const options = {
   scenarios: {
-    // 시나리오 1: 100명이 1초 동안 동시 요청
+    // 시나리오 1: 100명이 1초 동안 동시 요청 (동기 방식 성능 테스트)
     spike_test: {
       executor: 'constant-arrival-rate',
       rate: 100,           // 100개 요청
       timeUnit: '1s',      // 1초 동안
-      duration: '5s',      // 5초간 지속 (여유있게)
+      duration: '5s',      // 5초간 지속
       preAllocatedVUs: 100, // 미리 할당할 VU
       maxVUs: 150,         // 최대 VU
     },
@@ -38,9 +38,9 @@ export default function () {
     },
   };
 
-  // 선착순 참여 요청
+  // 동기 방식 참여 요청 (Kafka 없이 바로 DB 처리)
   const response = http.post(
-    `${BASE_URL}/api/campaigns/${CAMPAIGN_ID}/participation`,
+    `${BASE_URL}/api/campaigns/${CAMPAIGN_ID}/participation-sync`,
     payload,
     params
   );
@@ -56,11 +56,28 @@ export default function () {
         return false;
       }
     },
+    'response has method=SYNC': (r) => {
+      try {
+        const body = JSON.parse(r.body);
+        return body.data && body.data.method === 'SYNC';
+      } catch (e) {
+        return false;
+      }
+    },
   });
 
-  // 성공/실패 카운트 (참고: Kafka 비동기 처리라 즉시 결과는 모름)
+  // 성공/실패 카운트 (동기 방식이므로 즉시 결과 확인 가능)
   if (response.status === 200) {
-    successCount.add(1);
+    try {
+      const body = JSON.parse(response.body);
+      if (body.data && body.data.status === 'SUCCESS') {
+        successCount.add(1);
+      } else {
+        failCount.add(1);
+      }
+    } catch (e) {
+      failCount.add(1);
+    }
   } else {
     failCount.add(1);
   }
