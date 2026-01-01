@@ -2,7 +2,9 @@ package io.eventdriven.batchkafka.api.controller;
 
 import io.eventdriven.batchkafka.api.common.ApiResponse;
 import io.eventdriven.batchkafka.domain.entity.CampaignStats;
+import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
 import io.eventdriven.batchkafka.domain.repository.CampaignStatsRepository;
+import io.eventdriven.batchkafka.domain.repository.ParticipationHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -10,7 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +31,7 @@ import java.util.stream.Collectors;
 public class StatsController {
 
     private final CampaignStatsRepository statsRepository;
+    private final ParticipationHistoryRepository participationHistoryRepository;
     private final JdbcTemplate jdbcTemplate;
 
     /**
@@ -267,5 +272,98 @@ public class StatsController {
         }
         double rate = (stat.getSuccessCount() * 100.0) / total;
         return String.format("%.2f%%", rate);
+    }
+
+    /**
+     * 순서 분석 API - Kafka offset 순서 vs 실제 처리 순서 비교
+     * GET /api/admin/stats/order-analysis/{campaignId}
+     */
+    @GetMapping("/order-analysis/{campaignId}")
+    public ResponseEntity<ApiResponse<?>> analyzeProcessingOrder(@PathVariable Long campaignId) {
+        try {
+            long startTime = System.currentTimeMillis();
+
+            // 1. Kafka offset 순서로 데이터 조회
+            List<ParticipationHistory> records = participationHistoryRepository
+                    .findByCampaignIdOrderByKafkaOffsetAsc(campaignId);
+
+            if (records.isEmpty()) {
+                Map<String, Object> emptyData = Map.of(
+                        "campaignId", campaignId,
+                        "message", "Kafka 메타데이터가 없는 참여 이력입니다. 최근 테스트 데이터를 확인하세요."
+                );
+                return ResponseEntity.ok(ApiResponse.success("데이터 없음", emptyData));
+            }
+
+            // 2. 순서 일치율 계산 (offset 순서 vs created_at 순서)
+            int orderMismatches = 0;
+            for (int i = 0; i < records.size() - 1; i++) {
+                ParticipationHistory current = records.get(i);
+                ParticipationHistory next = records.get(i + 1);
+
+                // offset은 오름차순인데, created_at이 역전되면 순서 섞임
+                if (current.getCreatedAt().isAfter(next.getCreatedAt())) {
+                    orderMismatches++;
+                }
+            }
+
+            double orderAccuracy = records.size() > 1
+                ? 100.0 * (records.size() - 1 - orderMismatches) / (records.size() - 1)
+                : 100.0;
+
+            // 3. 파티션별 분포
+            Map<Integer, Long> partitionDistribution = records.stream()
+                    .filter(r -> r.getKafkaPartition() != null)
+                    .collect(Collectors.groupingBy(
+                            ParticipationHistory::getKafkaPartition,
+                            Collectors.counting()
+                    ));
+
+            // 4. 샘플 데이터 (처음 50개)
+            List<Map<String, Object>> samples = records.stream()
+                    .limit(50)
+                    .map(r -> {
+                        Map<String, Object> sample = new HashMap<>();
+                        sample.put("offset", r.getKafkaOffset());
+                        sample.put("partition", r.getKafkaPartition());
+                        sample.put("userId", r.getUserId());
+                        sample.put("status", r.getStatus().toString());
+                        sample.put("processedAt", r.getCreatedAt().toString());
+                        sample.put("kafkaTimestamp", r.getKafkaTimestamp() != null
+                                ? Instant.ofEpochMilli(r.getKafkaTimestamp())
+                                        .atZone(ZoneId.of("Asia/Seoul"))
+                                        .toLocalDateTime()
+                                        .toString()
+                                : null);
+                        return sample;
+                    })
+                    .collect(Collectors.toList());
+
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+
+            // 5. 응답 데이터 구성
+            Map<String, Object> data = new HashMap<>();
+            data.put("campaignId", campaignId);
+            data.put("queryTimeMs", duration);
+            data.put("summary", Map.of(
+                    "totalRecords", records.size(),
+                    "orderMismatches", orderMismatches,
+                    "orderAccuracy", String.format("%.2f%%", orderAccuracy),
+                    "partitionCount", partitionDistribution.size()
+            ));
+            data.put("partitionDistribution", partitionDistribution);
+            data.put("samples", samples);
+
+            log.info("📊 순서 분석 완료 - campaignId: {}, totalRecords: {}, orderAccuracy: {:.2f}%, queryTime: {}ms",
+                    campaignId, records.size(), orderAccuracy, duration);
+
+            return ResponseEntity.ok(ApiResponse.success(data));
+
+        } catch (Exception e) {
+            log.error("🚨 순서 분석 실패 - campaignId: {}", campaignId, e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.fail("순서 분석 중 오류가 발생했습니다."));
+        }
     }
 }

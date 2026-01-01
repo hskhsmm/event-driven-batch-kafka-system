@@ -12,6 +12,7 @@ import io.eventdriven.batchkafka.domain.repository.CampaignRepository;
 import io.eventdriven.batchkafka.domain.repository.ParticipationHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.dao.DataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -45,22 +46,30 @@ public class ParticipationEventConsumer {
             containerFactory = "kafkaListenerContainerFactory"
     )
     @Transactional
-    public void consumeParticipationEvent(String message, Acknowledgment acknowledgment) {
+    public void consumeParticipationEvent(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
+        String message = record.value();
         int retryCount = 0;
 
         while (retryCount < MAX_RETRIES) {
             try {
-                log.info("📨 Kafka 메시지 수신 (시도 {}/{}): {}", retryCount + 1, MAX_RETRIES, message);
+                log.info("📨 Kafka 메시지 수신 (시도 {}/{}): {} [offset={}, partition={}]",
+                        retryCount + 1, MAX_RETRIES, message, record.offset(), record.partition());
 
                 // 1. JSON 파싱
                 ParticipationEvent event = parseMessage(message);
-                log.info("✅ JSON 파싱 성공 - Campaign ID: {}, User ID: {}",
-                        event.getCampaignId(), event.getUserId());
 
-                // 2. 비즈니스 로직 실행
+                // 2. Kafka 메타데이터 설정
+                event.setKafkaOffset(record.offset());
+                event.setKafkaPartition(record.partition());
+                event.setKafkaTimestamp(record.timestamp());
+
+                log.info("✅ JSON 파싱 성공 - Campaign ID: {}, User ID: {}, Offset: {}, Partition: {}",
+                        event.getCampaignId(), event.getUserId(), event.getKafkaOffset(), event.getKafkaPartition());
+
+                // 3. 비즈니스 로직 실행
                 processParticipation(event);
 
-                // 3. 성공 시 커밋 후 반환
+                // 4. 성공 시 커밋 후 반환
                 acknowledgment.acknowledge();
                 log.info("✅ 메시지 처리 완료 및 커밋 - Campaign ID: {}, User ID: {}",
                         event.getCampaignId(), event.getUserId());
@@ -138,10 +147,17 @@ public class ParticipationEventConsumer {
                     event.getUserId(), event.getCampaignId());
         }
 
-        // 2. 참여 이력 저장
+        // 2. 참여 이력 저장 (Kafka 메타데이터 포함)
         Campaign campaign = campaignRepository.findById(event.getCampaignId())
                 .orElseThrow(() -> new CampaignNotFoundException(event.getCampaignId()));
-        ParticipationHistory history = new ParticipationHistory(campaign, event.getUserId(), status);
+        ParticipationHistory history = new ParticipationHistory(
+                campaign,
+                event.getUserId(),
+                status,
+                event.getKafkaOffset(),
+                event.getKafkaPartition(),
+                event.getKafkaTimestamp()
+        );
         participationHistoryRepository.save(history);
     }
 

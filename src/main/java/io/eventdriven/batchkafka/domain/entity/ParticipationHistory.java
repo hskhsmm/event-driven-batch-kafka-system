@@ -26,9 +26,31 @@ public class ParticipationHistory extends BaseTimeEntity {
     @Column(nullable = false)
     private ParticipationStatus status;
 
+    // Kafka 메타데이터 (순서 분석용)
+    @Column(name = "kafka_offset")
+    private Long kafkaOffset;
+
+    @Column(name = "kafka_partition")
+    private Integer kafkaPartition;
+
+    @Column(name = "kafka_timestamp")
+    private Long kafkaTimestamp;
+
+    // 기존 생성자 (하위 호환성)
     public ParticipationHistory(Campaign campaign, Long userId, ParticipationStatus status) {
         this.campaign = campaign;
         this.userId = userId;
         this.status = status;
+    }
+
+    // Kafka 메타데이터 포함 생성자
+    public ParticipationHistory(Campaign campaign, Long userId, ParticipationStatus status,
+                                Long kafkaOffset, Integer kafkaPartition, Long kafkaTimestamp) {
+        this.campaign = campaign;
+        this.userId = userId;
+        this.status = status;
+        this.kafkaOffset = kafkaOffset;
+        this.kafkaPartition = kafkaPartition;
+        this.kafkaTimestamp = kafkaTimestamp;
     }
 }

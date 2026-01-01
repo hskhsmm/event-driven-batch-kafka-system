@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface ParticipationHistoryRepository extends JpaRepository<ParticipationHistory, Long> {
 
     /**
@@ -32,4 +34,15 @@ public interface ParticipationHistoryRepository extends JpaRepository<Participat
         WHERE ph.campaign.id = :campaignId AND ph.status = 'FAIL'
     """)
     Long countFailByCampaignId(@Param("campaignId") Long campaignId);
+
+    /**
+     * 캠페인별 참여 이력 조회 (Kafka offset 순서대로, 순서 분석용)
+     */
+    @Query("""
+        SELECT ph
+        FROM ParticipationHistory ph
+        WHERE ph.campaign.id = :campaignId AND ph.kafkaOffset IS NOT NULL
+        ORDER BY ph.kafkaOffset ASC
+    """)
+    List<ParticipationHistory> findByCampaignIdOrderByKafkaOffsetAsc(@Param("campaignId") Long campaignId);
 }
