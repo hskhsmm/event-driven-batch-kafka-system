@@ -69,7 +69,7 @@ public class ParticipationEventConsumer {
                 // 3. 비즈니스 로직 실행
                 processParticipation(event);
 
-                // 3. 성공 시 커밋 후 반환
+                // 4. 성공 시 커밋 후 반환
                 acknowledgment.acknowledge();
                 log.info("✅ 메시지 처리 완료 및 커밋 - Campaign ID: {}, User ID: {}",
                         event.getCampaignId(), event.getUserId());

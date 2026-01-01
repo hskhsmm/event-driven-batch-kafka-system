@@ -313,6 +313,7 @@ public class StatsController {
 
             // 3. 파티션별 분포
             Map<Integer, Long> partitionDistribution = records.stream()
+                    .filter(r -> r.getKafkaPartition() != null)
                     .collect(Collectors.groupingBy(
                             ParticipationHistory::getKafkaPartition,
                             Collectors.counting()
