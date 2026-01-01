@@ -63,8 +63,9 @@ public class KafkaTopicService {
      */
     private int getCurrentPartitionCount(AdminClient adminClient) throws ExecutionException, InterruptedException {
         DescribeTopicsResult describeResult = adminClient.describeTopics(Collections.singletonList(TOPIC_NAME));
-        Map<String, TopicDescription> topicDescriptions = describeResult.all().get();
-        TopicDescription description = topicDescriptions.get(TOPIC_NAME);
+
+        // topicNameValues() 메서드 사용
+        TopicDescription description = describeResult.topicNameValues().get(TOPIC_NAME).get();
 
         if (description == null) {
             throw new IllegalStateException("토픽이 존재하지 않습니다: " + TOPIC_NAME);
