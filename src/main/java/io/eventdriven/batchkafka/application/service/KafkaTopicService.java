@@ -3,6 +3,7 @@ package io.eventdriven.batchkafka.application.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
@@ -11,8 +12,12 @@ import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Kafka 토픽 파티션 동적 관리 서비스
@@ -33,30 +38,63 @@ public class KafkaTopicService {
      * @return 실제 적용된 파티션 수
      */
     public int ensurePartitions(int desiredPartitions) {
+        log.info("🔍 ensurePartitions 시작 - 요청 파티션: {}", desiredPartitions);
         synchronized (partitionLock) {
-            try (AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+            log.info("🔒 Lock 획득");
 
-            // 1. 현재 파티션 수 확인
-            int currentPartitions = getCurrentPartitionCount(adminClient);
-            log.info("📊 현재 파티션 수: {}, 요청된 파티션 수: {}", currentPartitions, desiredPartitions);
+            // AdminClient 설정에 타임아웃 추가
+            Map<String, Object> config = new HashMap<>(kafkaAdmin.getConfigurationProperties());
+            config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 10000); // 10초
+            config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 15000); // 15초
+            config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, 5000); // 메타데이터 최대 수명 5초
 
-            // 2. 파티션이 부족하면 늘림
-            if (desiredPartitions > currentPartitions) {
-                increasePartitions(adminClient, desiredPartitions);
-                log.info("✅ 파티션 증가 완료: {} → {}", currentPartitions, desiredPartitions);
-                return desiredPartitions;
-            } else if (desiredPartitions < currentPartitions) {
-                log.warn("⚠️ 파티션 감소는 지원되지 않습니다. 현재: {}, 요청: {}", currentPartitions, desiredPartitions);
-                return currentPartitions;
-            } else {
-                log.info("ℹ️ 파티션 수가 이미 적절합니다: {}", currentPartitions);
-                return currentPartitions;
-            }
+            log.info("📝 AdminClient 설정 완료 - bootstrap.servers: {}", config.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
 
+            AdminClient adminClient = null;
+            try {
+                log.info("🔌 AdminClient 생성 시작...");
+
+                // AdminClient 생성을 타임아웃과 함께 실행
+                adminClient = CompletableFuture.supplyAsync(() -> {
+                    log.info("⚙️ AdminClient.create() 호출...");
+                    return AdminClient.create(config);
+                }).get(20, TimeUnit.SECONDS);
+
+                log.info("✅ AdminClient 생성 완료");
+
+                // 1. 현재 파티션 수 확인
+                log.info("📡 현재 파티션 수 조회 시작");
+                int currentPartitions = getCurrentPartitionCount(adminClient);
+                log.info("📊 현재 파티션 수: {}, 요청된 파티션 수: {}", currentPartitions, desiredPartitions);
+
+                // 2. 파티션이 부족하면 늘림
+                if (desiredPartitions > currentPartitions) {
+                    increasePartitions(adminClient, desiredPartitions);
+                    log.info("✅ 파티션 증가 완료: {} → {}", currentPartitions, desiredPartitions);
+                    return desiredPartitions;
+                } else if (desiredPartitions < currentPartitions) {
+                    log.warn("⚠️ 파티션 감소는 지원되지 않습니다. 현재: {}, 요청: {}", currentPartitions, desiredPartitions);
+                    return currentPartitions;
+                } else {
+                    log.info("ℹ️ 파티션 수가 이미 적절합니다: {}", currentPartitions);
+                    return currentPartitions;
+                }
+
+            } catch (TimeoutException e) {
+                log.error("⏱️ AdminClient 생성 타임아웃 (20초 초과)", e);
+                return 1;
             } catch (Exception e) {
                 log.error("❌ 파티션 관리 중 오류 발생", e);
                 // 오류 발생 시 기본값 반환 (테스트는 계속 진행)
                 return 1;
+            } finally {
+                if (adminClient != null) {
+                    try {
+                        adminClient.close();
+                    } catch (Exception e) {
+                        log.warn("AdminClient 종료 중 오류", e);
+                    }
+                }
             }
         }
     }
