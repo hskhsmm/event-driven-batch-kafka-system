@@ -84,8 +84,14 @@ public class LoadTestService {
      */
     protected void executeK6TestAsync(String jobId, LoadTestRequest request, String testType) {
         try {
-            log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}",
-                    jobId, testType, request.getCampaignId());
+            log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}, TotalRequests: {}, Partitions: {}",
+                    jobId, testType, request.getCampaignId(), request.getTotalRequests(), request.getPartitions());
+
+            // 총 요청 수 기반으로 rate와 duration 계산
+            K6Config config = calculateK6Config(request.getTotalRequests(), testType);
+
+            log.info("📊 K6 설정 - Rate: {}/s, Duration: {}s, MaxVUs: {}",
+                    config.rate, config.duration, config.maxVUs);
 
             // K6 스크립트 경로 (Docker 컨테이너 /app 기준)
             String scriptPath = testType.equals("kafka")
@@ -96,8 +102,11 @@ public class LoadTestService {
             ProcessBuilder processBuilder = new ProcessBuilder(
                     "k6", "run",
                     "-e", "CAMPAIGN_ID=" + request.getCampaignId(),
-                    "-e", "VUS=" + request.getVirtualUsers(),
-                    "-e", "DURATION=" + request.getDuration() + "s",
+                    "-e", "TOTAL_REQUESTS=" + request.getTotalRequests(),
+                    "-e", "RATE=" + config.rate,
+                    "-e", "DURATION=" + config.duration,
+                    "-e", "MAX_VUS=" + config.maxVUs,
+                    "-e", "PARTITIONS=" + request.getPartitions(),
                     scriptPath
             );
 
@@ -271,6 +280,46 @@ public class LoadTestService {
             case "ms":
             default:
                 return numValue; // 이미 밀리초
+        }
+    }
+
+    /**
+     * 총 요청 수 기반으로 K6 설정 계산
+     *
+     * @param totalRequests 총 요청 수
+     * @param testType "kafka" 또는 "sync"
+     * @return K6 설정 (rate, duration, maxVUs)
+     */
+    private K6Config calculateK6Config(int totalRequests, String testType) {
+        if (testType.equals("kafka")) {
+            // Kafka: 응답이 빠름 (~15ms) → 짧은 시간에 많은 요청
+            int duration = 10; // 10초
+            int rate = totalRequests / duration; // 초당 요청 수
+            int maxVUs = Math.max(rate * 2, 1000); // rate의 2배 또는 최소 1000
+
+            return new K6Config(rate, duration, maxVUs);
+        } else {
+            // Sync: 응답이 느림 (~4.5s) → 긴 시간에 걸쳐 요청
+            int duration = 30; // 30초
+            int rate = totalRequests / duration; // 초당 요청 수
+            int maxVUs = Math.max(rate * 10, 5000); // rate의 10배 또는 최소 5000
+
+            return new K6Config(rate, duration, maxVUs);
+        }
+    }
+
+    /**
+     * K6 설정을 담는 내부 클래스
+     */
+    private static class K6Config {
+        final int rate;       // 초당 요청 수
+        final int duration;   // 테스트 지속 시간 (초)
+        final int maxVUs;     // 최대 가상 사용자 수
+
+        K6Config(int rate, int duration, int maxVUs) {
+            this.rate = rate;
+            this.duration = duration;
+            this.maxVUs = maxVUs;
         }
     }
 }

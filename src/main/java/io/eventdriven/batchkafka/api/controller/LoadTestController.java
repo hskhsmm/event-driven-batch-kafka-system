@@ -28,8 +28,8 @@ public class LoadTestController {
     public ResponseEntity<ApiResponse<Map<String, String>>> executeKafkaTest(
             @RequestBody @Valid LoadTestRequest request
     ) {
-        log.info("🚀 Kafka 부하 테스트 요청 - CampaignID: {}, VUs: {}, Duration: {}s",
-                request.getCampaignId(), request.getVirtualUsers(), request.getDuration());
+        log.info("🚀 Kafka 부하 테스트 요청 - CampaignID: {}, TotalRequests: {}, Partitions: {}",
+                request.getCampaignId(), request.getTotalRequests(), request.getPartitions());
 
         String jobId = loadTestService.executeKafkaTest(request);
 
@@ -49,8 +49,8 @@ public class LoadTestController {
     public ResponseEntity<ApiResponse<Map<String, String>>> executeSyncTest(
             @RequestBody @Valid LoadTestRequest request
     ) {
-        log.info("🚀 동기 부하 테스트 요청 - CampaignID: {}, VUs: {}, Duration: {}s",
-                request.getCampaignId(), request.getVirtualUsers(), request.getDuration());
+        log.info("🚀 동기 부하 테스트 요청 - CampaignID: {}, TotalRequests: {}, Partitions: {}",
+                request.getCampaignId(), request.getTotalRequests(), request.getPartitions());
 
         String jobId = loadTestService.executeSyncTest(request);
 
