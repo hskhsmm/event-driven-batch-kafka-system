@@ -93,6 +93,11 @@ public class LoadTestService {
             if (testType.equals("kafka")) {
                 int actualPartitions = kafkaTopicService.ensurePartitions(request.getPartitions());
                 log.info("🔧 Kafka 파티션 확인/조정 완료 - 실제 파티션 수: {}", actualPartitions);
+
+                // Consumer rebalancing 대기 (파티션 변경 시 Consumer가 새 파티션 인식 필요)
+                log.info("⏳ Consumer rebalancing 대기 중...");
+                Thread.sleep(5000);
+                log.info("✅ Consumer rebalancing 완료");
             }
 
             // 총 요청 수 기반으로 rate와 duration 계산

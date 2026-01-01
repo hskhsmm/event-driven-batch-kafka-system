@@ -24,6 +24,7 @@ public class KafkaTopicService {
 
     private final KafkaAdmin kafkaAdmin;
     private static final String TOPIC_NAME = "campaign-participation-topic";
+    private final Object partitionLock = new Object();
 
     /**
      * 토픽의 파티션 수를 확인하고, 필요하면 늘림
@@ -32,7 +33,8 @@ public class KafkaTopicService {
      * @return 실제 적용된 파티션 수
      */
     public int ensurePartitions(int desiredPartitions) {
-        try (AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+        synchronized (partitionLock) {
+            try (AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
 
             // 1. 현재 파티션 수 확인
             int currentPartitions = getCurrentPartitionCount(adminClient);
@@ -51,10 +53,11 @@ public class KafkaTopicService {
                 return currentPartitions;
             }
 
-        } catch (Exception e) {
-            log.error("❌ 파티션 관리 중 오류 발생", e);
-            // 오류 발생 시 기본값 반환 (테스트는 계속 진행)
-            return 1;
+            } catch (Exception e) {
+                log.error("❌ 파티션 관리 중 오류 발생", e);
+                // 오류 발생 시 기본값 반환 (테스트는 계속 진행)
+                return 1;
+            }
         }
     }
 
@@ -63,8 +66,7 @@ public class KafkaTopicService {
      */
     private int getCurrentPartitionCount(AdminClient adminClient) throws ExecutionException, InterruptedException {
         DescribeTopicsResult describeResult = adminClient.describeTopics(Collections.singletonList(TOPIC_NAME));
-        Map<String, TopicDescription> topicDescriptions = describeResult.all().get();
-        TopicDescription description = topicDescriptions.get(TOPIC_NAME);
+        TopicDescription description = describeResult.topicNameValues().get(TOPIC_NAME).get();
 
         if (description == null) {
             throw new IllegalStateException("토픽이 존재하지 않습니다: " + TOPIC_NAME);
