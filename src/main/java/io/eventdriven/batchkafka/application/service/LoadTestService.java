@@ -115,7 +115,14 @@ public class LoadTestService {
                 }
             }
 
-            int exitCode = process.waitFor();
+            // 타임아웃 5분 설정 (K6 테스트가 무한 대기하는 것 방지)
+            boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.MINUTES);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new RuntimeException("K6 테스트 타임아웃 (5분 초과)");
+            }
+
+            int exitCode = process.exitValue();
 
             if (exitCode == 0) {
                 // 성공: 결과 파싱
@@ -200,7 +207,8 @@ public class LoadTestService {
             // p(99) 파싱 (optional)
             Pattern p99Pattern = Pattern.compile("p\\(99\\)=(\\d+\\.?\\d*)(ms|s|µs|m)");
             Matcher p99Matcher = p99Pattern.matcher(durationLine);
-            if (p99Matcher.find()) {
+            boolean hasP99 = p99Matcher.find();  // 결과를 변수에 저장
+            if (hasP99) {
                 builder.p99(convertToMs(p99Matcher.group(1), p99Matcher.group(2)));
             }
 
@@ -211,7 +219,7 @@ public class LoadTestService {
                 double maxValue = convertToMs(maxMatcher.group(1), maxMatcher.group(2));
                 builder.max(maxValue);
                 // p99가 없으면 max를 p99로 사용
-                if (!p99Matcher.find()) {
+                if (!hasP99) {  // 저장된 변수 사용
                     builder.p99(maxValue);
                 }
             }
