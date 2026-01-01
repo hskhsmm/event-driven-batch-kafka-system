@@ -6,17 +6,25 @@ import { Counter } from 'k6/metrics';
 const successCount = new Counter('participation_success');
 const failCount = new Counter('participation_fail');
 
+// 환경변수로부터 설정 읽기
+const RATE = parseInt(__ENV.RATE) || 3000;           // 초당 요청 수
+const DURATION = parseInt(__ENV.DURATION) || 10;     // 테스트 지속 시간 (초)
+const MAX_VUS = parseInt(__ENV.MAX_VUS) || 5000;     // 최대 가상 사용자 수
+const TOTAL_REQUESTS = parseInt(__ENV.TOTAL_REQUESTS) || 30000; // 총 요청 수
+const PARTITIONS = parseInt(__ENV.PARTITIONS) || 3;  // Kafka 파티션 수
+
+console.log(`🚀 Kafka 부하 테스트 설정: ${TOTAL_REQUESTS}개 요청, ${RATE}/s, ${DURATION}s, ${PARTITIONS} 파티션`);
+
 // 테스트 설정
 export const options = {
   scenarios: {
-    // 시나리오 1: 100명이 1초 동안 동시 요청
     spike_test: {
       executor: 'constant-arrival-rate',
-      rate: 100,           // 100개 요청
-      timeUnit: '1s',      // 1초 동안
-      duration: '5s',      // 5초간 지속 (여유있게)
-      preAllocatedVUs: 100, // 미리 할당할 VU
-      maxVUs: 150,         // 최대 VU
+      rate: RATE,              // 초당 요청 수 (환경변수)
+      timeUnit: '1s',
+      duration: `${DURATION}s`, // 지속 시간 (환경변수)
+      preAllocatedVUs: Math.floor(MAX_VUS * 0.6), // maxVUs의 60%를 미리 할당
+      maxVUs: MAX_VUS,         // 최대 VU (환경변수)
     },
   },
   // Threshold 제거: 성능 측정이 목적이므로 pass/fail 기준 불필요
