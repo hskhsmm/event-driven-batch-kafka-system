@@ -54,17 +54,17 @@ public class KafkaConfig {
     }
 
     /**
-     * 토픽 자동 생성 설정
-     * - partitions: 1 (선착순 순서 보장을 위해 파티션 1개 설정)
-     * - replicas: 1 (로컬 개발 환경이므로 1개)
+     * 토픽 자동 생성 설정 제거
+     * - 이유: 파티션 수를 동적으로 관리하기 위해 KafkaTopicService에서 처리
+     * - KafkaTopicService.ensurePartitions()에서 토픽 생성 및 파티션 증가를 처리
      */
-    @Bean
-    public NewTopic campaignParticipationTopic() {
-        return TopicBuilder.name(TOPIC_NAME)
-                .partitions(1)
-                .replicas(1)
-                .build();
-    }
+    // @Bean 제거: 동적 파티션 관리를 위해 토픽 자동 생성 비활성화
+    // public NewTopic campaignParticipationTopic() {
+    //     return TopicBuilder.name(TOPIC_NAME)
+    //             .partitions(1)
+    //             .replicas(1)
+    //             .build();
+    // }
 
     /**
      * Kafka Consumer 설정

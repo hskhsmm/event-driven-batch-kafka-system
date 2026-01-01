@@ -4,9 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.CreatePartitionsResult;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +30,7 @@ public class KafkaTopicService {
 
     /**
      * 토픽의 파티션 수를 확인하고, 필요하면 늘림
+     * 토픽이 없으면 자동으로 생성
      *
      * @param desiredPartitions 원하는 파티션 수
      * @return 실제 적용된 파티션 수
@@ -34,11 +38,20 @@ public class KafkaTopicService {
     public int ensurePartitions(int desiredPartitions) {
         try (AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
 
-            // 1. 현재 파티션 수 확인
-            int currentPartitions = getCurrentPartitionCount(adminClient);
+            // 1. 토픽 존재 여부 확인 및 파티션 수 조회
+            Integer currentPartitions = getCurrentPartitionCount(adminClient);
+
+            // 2. 토픽이 없으면 생성
+            if (currentPartitions == null) {
+                log.info("🆕 토픽이 존재하지 않습니다. 새로 생성합니다: {}, 파티션: {}", TOPIC_NAME, desiredPartitions);
+                createTopic(adminClient, desiredPartitions);
+                log.info("✅ 토픽 생성 완료: {}, 파티션: {}", TOPIC_NAME, desiredPartitions);
+                return desiredPartitions;
+            }
+
             log.info("📊 현재 파티션 수: {}, 요청된 파티션 수: {}", currentPartitions, desiredPartitions);
 
-            // 2. 파티션이 부족하면 늘림
+            // 3. 파티션이 부족하면 늘림
             if (desiredPartitions > currentPartitions) {
                 increasePartitions(adminClient, desiredPartitions);
                 log.info("✅ 파티션 증가 완료: {} → {}", currentPartitions, desiredPartitions);
@@ -60,18 +73,37 @@ public class KafkaTopicService {
 
     /**
      * 현재 토픽의 파티션 수 조회
+     * @return 파티션 수, 토픽이 없으면 null 반환
      */
-    private int getCurrentPartitionCount(AdminClient adminClient) throws ExecutionException, InterruptedException {
-        DescribeTopicsResult describeResult = adminClient.describeTopics(Collections.singletonList(TOPIC_NAME));
+    private Integer getCurrentPartitionCount(AdminClient adminClient) {
+        try {
+            DescribeTopicsResult describeResult = adminClient.describeTopics(Collections.singletonList(TOPIC_NAME));
+            TopicDescription description = describeResult.topicNameValues().get(TOPIC_NAME).get();
 
-        // topicNameValues() 메서드 사용
-        TopicDescription description = describeResult.topicNameValues().get(TOPIC_NAME).get();
+            if (description == null) {
+                return null;
+            }
 
-        if (description == null) {
-            throw new IllegalStateException("토픽이 존재하지 않습니다: " + TOPIC_NAME);
+            return description.partitions().size();
+        } catch (Exception e) {
+            // UnknownTopicOrPartitionException 등 토픽이 없는 경우
+            if (e.getCause() instanceof UnknownTopicOrPartitionException ||
+                e.getMessage().contains("UnknownTopicOrPartitionException")) {
+                log.debug("토픽이 아직 존재하지 않습니다: {}", TOPIC_NAME);
+                return null;
+            }
+            // 그 외 예외는 상위로 전파
+            throw new RuntimeException("토픽 정보 조회 실패: " + TOPIC_NAME, e);
         }
+    }
 
-        return description.partitions().size();
+    /**
+     * 새로운 토픽 생성
+     */
+    private void createTopic(AdminClient adminClient, int partitions) throws ExecutionException, InterruptedException {
+        NewTopic newTopic = new NewTopic(TOPIC_NAME, partitions, (short) 1);
+        CreateTopicsResult result = adminClient.createTopics(Collections.singletonList(newTopic));
+        result.all().get(); // 완료될 때까지 대기
     }
 
     /**
