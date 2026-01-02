@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ParticipationHistoryRepository extends JpaRepository<ParticipationHistory, Long> {
@@ -45,4 +46,10 @@ public interface ParticipationHistoryRepository extends JpaRepository<Participat
         ORDER BY ph.kafkaOffset ASC
     """)
     List<ParticipationHistory> findByCampaignIdOrderByKafkaOffsetAsc(@Param("campaignId") Long campaignId);
+
+    /**
+     * 캠페인별 최근 참여 이력 조회 (실시간 처리 성능 측정용)
+     * 지정된 시간 이후의 데이터를 생성 시간 순서대로 조회
+     */
+    List<ParticipationHistory> findByCampaignIdAndCreatedAtAfterOrderByCreatedAtAsc(Long campaignId, LocalDateTime createdAt);
 }
