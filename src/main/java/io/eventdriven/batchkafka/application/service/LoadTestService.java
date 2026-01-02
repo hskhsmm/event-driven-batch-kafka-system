@@ -89,15 +89,15 @@ public class LoadTestService {
             log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}, TotalRequests: {}, Partitions: {}",
                     jobId, testType, request.getCampaignId(), request.getTotalRequests(), request.getPartitions());
 
-            // Kafka 테스트인 경우, 파티션 수 자동 조정
+            // Kafka 테스트인 경우 파티션 정보 로깅
             if (testType.equals("kafka")) {
-                int actualPartitions = kafkaTopicService.ensurePartitions(request.getPartitions());
-                log.info("🔧 Kafka 파티션 확인/조정 완료 - 실제 파티션 수: {}", actualPartitions);
+                log.info("ℹ️ Kafka 파티션 수동 관리 모드");
+                log.info("📌 요청된 파티션 수: {} (실제 파티션은 Docker로 수동 설정)", request.getPartitions());
+                log.info("💡 파티션 변경 명령어: docker exec kafka kafka-topics --bootstrap-server kafka:29092 --alter --topic campaign-participation-topic --partitions {}", request.getPartitions());
 
-                // Consumer rebalancing 대기 (파티션 변경 시 Consumer가 새 파티션 인식 필요)
-                log.info("⏳ Consumer rebalancing 대기 중...");
-                Thread.sleep(5000);
-                log.info("✅ Consumer rebalancing 완료");
+                // 파티션 자동 조정 제거 (kafka-clients 4.1.1 AdminClient 버그로 인해)
+                // 대신 Docker 명령어로 수동 관리:
+                // docker exec kafka kafka-topics --bootstrap-server kafka:29092 --alter --topic campaign-participation-topic --partitions <원하는 파티션 수>
             }
 
             // 총 요청 수 기반으로 rate와 duration 계산
