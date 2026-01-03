@@ -5,6 +5,7 @@ import io.eventdriven.batchkafka.api.dto.request.ParticipationRequest;
 import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundException;
 import io.eventdriven.batchkafka.application.service.ParticipationService;
 import io.eventdriven.batchkafka.domain.entity.Campaign;
+import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
 import io.eventdriven.batchkafka.domain.repository.CampaignRepository;
 import io.eventdriven.batchkafka.domain.repository.ParticipationHistoryRepository;
 import jakarta.validation.Valid;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -112,6 +114,46 @@ public class ParticipationController {
             ? (campaign.getTotalStock() - campaign.getCurrentStock()) * 100.0 / campaign.getTotalStock()
             : 0.0;
         data.put("stockUsageRate", String.format("%.2f%%", usageRate));
+
+        // ===== 실제 처리 성능 지표 추가 (최근 5초) =====
+        java.time.LocalDateTime since = java.time.LocalDateTime.now().minusSeconds(5);
+        List<ParticipationHistory> recentRecords = participationHistoryRepository
+                .findByCampaignIdAndCreatedAtAfterOrderByCreatedAtAsc(id, since);
+
+        if (!recentRecords.isEmpty()) {
+            // 1. 실제 처리 TPS (메시지 처리 속도)
+            java.time.LocalDateTime firstProcessed = recentRecords.get(0).getCreatedAt();
+            java.time.LocalDateTime lastProcessed = recentRecords.get(recentRecords.size() - 1).getCreatedAt();
+            long durationSeconds = java.time.Duration.between(firstProcessed, lastProcessed).getSeconds();
+            double actualTps = durationSeconds > 0 ? (double) recentRecords.size() / durationSeconds : 0;
+
+            // 2. 평균 처리 지연시간 (Kafka → DB)
+            double avgLatencyMs = recentRecords.stream()
+                    .filter(r -> r.getKafkaTimestamp() != null)
+                    .mapToLong(r -> {
+                        java.time.LocalDateTime kafkaTime = java.time.Instant.ofEpochMilli(r.getKafkaTimestamp())
+                                .atZone(java.time.ZoneId.of("Asia/Seoul"))
+                                .toLocalDateTime();
+                        return java.time.Duration.between(kafkaTime, r.getCreatedAt()).toMillis();
+                    })
+                    .average()
+                    .orElse(0.0);
+
+            Map<String, Object> processingMetrics = new HashMap<>();
+            processingMetrics.put("actualTps", Math.round(actualTps * 100.0) / 100.0);
+            processingMetrics.put("avgLatencyMs", Math.round(avgLatencyMs * 100.0) / 100.0);
+            processingMetrics.put("recentProcessed", recentRecords.size());
+
+            data.put("processingMetrics", processingMetrics);
+        } else {
+            // 최근 데이터 없음
+            Map<String, Object> processingMetrics = new HashMap<>();
+            processingMetrics.put("actualTps", 0.0);
+            processingMetrics.put("avgLatencyMs", 0.0);
+            processingMetrics.put("recentProcessed", 0);
+
+            data.put("processingMetrics", processingMetrics);
+        }
 
         return ResponseEntity.ok(ApiResponse.success(data));
     }

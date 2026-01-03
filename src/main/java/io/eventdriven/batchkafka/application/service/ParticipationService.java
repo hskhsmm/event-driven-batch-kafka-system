@@ -33,7 +33,11 @@ public class ParticipationService {
         try {
             // 1. JSON 직렬화
             String message = jsonMapper.writeValueAsString(event);
-            String key = String.valueOf(campaignId);
+
+            // Key를 null로 설정하여 round-robin 방식으로 파티션 분산
+            // 같은 campaignId를 key로 사용하면 모든 메시지가 같은 파티션으로 가서 순서 보장됨
+            // null을 사용하면 3개 파티션에 균등 분산되어 순서가 섞임
+            String key = null;
 
             // 2. Kafka 전송 (비동기 + 콜백)
             CompletableFuture<SendResult<String, String>> future =

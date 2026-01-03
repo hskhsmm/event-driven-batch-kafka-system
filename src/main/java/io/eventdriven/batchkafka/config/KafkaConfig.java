@@ -1,6 +1,10 @@
 package io.eventdriven.batchkafka.config;
 
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -16,9 +20,11 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @Configuration
 public class KafkaConfig {
 
@@ -106,9 +112,68 @@ public class KafkaConfig {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
-        factory.setConcurrency(1); // 단일 Consumer 스레드 (순서 보장)
+
+        // 토픽의 파티션 수를 자동 감지해서 concurrency 설정
+        int partitionCount = getTopicPartitionCount(TOPIC_NAME);
+        factory.setConcurrency(partitionCount); // 파티션 수만큼 Consumer 스레드 생성
+
         factory.getContainerProperties().setAckMode(
                 org.springframework.kafka.listener.ContainerProperties.AckMode.MANUAL); // 수동 커밋
         return factory;
+    }
+
+    /**
+     * Kafka 토픽의 파티션 수를 자동 감지 (재시도 포함)
+     * Docker 명령어로 파티션 수를 변경하면 자동으로 감지됨:
+     * docker exec kafka kafka-topics --bootstrap-server kafka:29092 --alter --topic campaign-participation-topic --partitions 3
+     */
+    private int getTopicPartitionCount(String topicName) {
+        int maxRetries = 5;
+        int retryDelayMs = 2000;
+
+        for (int retry = 0; retry < maxRetries; retry++) {
+            try {
+                Map<String, Object> configs = new HashMap<>();
+                configs.put("bootstrap.servers", bootstrapServers);
+
+                try (AdminClient adminClient = AdminClient.create(configs)) {
+                    DescribeTopicsResult result = adminClient.describeTopics(Collections.singletonList(topicName));
+                    Map<String, TopicDescription> descriptions = result.allTopicNames().get(5, java.util.concurrent.TimeUnit.SECONDS);
+                    TopicDescription description = descriptions.get(topicName);
+
+                    if (description == null) {
+                        log.warn("⚠️ 토픽 '{}' 을 찾을 수 없습니다. 재시도 {}/{}", topicName, retry + 1, maxRetries);
+                        Thread.sleep(retryDelayMs);
+                        continue;
+                    }
+
+                    int partitionCount = description.partitions().size();
+
+                    log.info("🔧 Kafka 토픽 '{}' 파티션 수 자동 감지: {} → Consumer concurrency: {}",
+                            topicName, partitionCount, partitionCount);
+
+                    return partitionCount;
+                }
+            } catch (org.apache.kafka.common.errors.UnknownTopicOrPartitionException e) {
+                log.warn("⚠️ 토픽 '{}' 이 아직 생성되지 않았습니다. 재시도 {}/{}", topicName, retry + 1, maxRetries);
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ 토픽 파티션 수 조회 중 오류 발생. 재시도 {}/{}: {}", retry + 1, maxRetries, e.getMessage());
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
+        log.warn("⚠️ 최대 재시도 횟수 초과. 기본값 1 사용");
+        return 1; // 기본값
     }
 }

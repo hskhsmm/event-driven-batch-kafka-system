@@ -275,7 +275,7 @@ public class StatsController {
     }
 
     /**
-     * 순서 분석 API - Kafka offset 순서 vs 실제 처리 순서 비교
+     * 순서 분석 API - Kafka offset 순서 vs 실제 DB 저장 순서 비교
      * GET /api/admin/stats/order-analysis/{campaignId}
      */
     @GetMapping("/order-analysis/{campaignId}")
@@ -283,11 +283,11 @@ public class StatsController {
         try {
             long startTime = System.currentTimeMillis();
 
-            // 1. Kafka offset 순서로 데이터 조회
-            List<ParticipationHistory> records = participationHistoryRepository
-                    .findByCampaignIdOrderByKafkaOffsetAsc(campaignId);
+            // 1. Kafka 메타데이터가 있는 모든 참여 이력 조회
+            List<ParticipationHistory> allRecords = participationHistoryRepository
+                    .findByCampaignIdOrderByKafkaTimestampAsc(campaignId);
 
-            if (records.isEmpty()) {
+            if (allRecords.isEmpty()) {
                 Map<String, Object> emptyData = Map.of(
                         "campaignId", campaignId,
                         "message", "Kafka 메타데이터가 없는 참여 이력입니다. 최근 테스트 데이터를 확인하세요."
@@ -295,68 +295,126 @@ public class StatsController {
                 return ResponseEntity.ok(ApiResponse.success("데이터 없음", emptyData));
             }
 
-            // 2. 순서 일치율 계산 (offset 순서 vs created_at 순서)
-            int orderMismatches = 0;
-            for (int i = 0; i < records.size() - 1; i++) {
-                ParticipationHistory current = records.get(i);
-                ParticipationHistory next = records.get(i + 1);
+            // 2. 파티션별로 데이터 그룹화 (파티션별 순서 분석용)
+            Map<Integer, List<ParticipationHistory>> partitionGroups = allRecords.stream()
+                    .filter(r -> r.getKafkaPartition() != null && r.getKafkaOffset() != null)
+                    .collect(Collectors.groupingBy(ParticipationHistory::getKafkaPartition));
 
-                // offset은 오름차순인데, created_at이 역전되면 순서 섞임
-                if (current.getCreatedAt().isAfter(next.getCreatedAt())) {
-                    orderMismatches++;
+            // 3-1. 파티션별 순서 불일치 계산 (참고용)
+            Map<Integer, Integer> partitionMismatches = new HashMap<>();
+            for (Map.Entry<Integer, List<ParticipationHistory>> entry : partitionGroups.entrySet()) {
+                Integer partition = entry.getKey();
+                List<ParticipationHistory> partitionRecords = entry.getValue();
+                partitionRecords.sort(java.util.Comparator.comparing(ParticipationHistory::getKafkaOffset));
+
+                int partitionMismatch = 0;
+                for (int i = 0; i < partitionRecords.size() - 1; i++) {
+                    ParticipationHistory current = partitionRecords.get(i);
+                    ParticipationHistory next = partitionRecords.get(i + 1);
+
+                    boolean orderMismatch;
+                    if (current.getProcessingStartedAtNanos() != null && next.getProcessingStartedAtNanos() != null) {
+                        orderMismatch = current.getProcessingStartedAtNanos() > next.getProcessingStartedAtNanos();
+                    } else {
+                        orderMismatch = current.getCreatedAt().isAfter(next.getCreatedAt());
+                    }
+
+                    if (orderMismatch) {
+                        partitionMismatch++;
+                    }
+                }
+                partitionMismatches.put(partition, partitionMismatch);
+            }
+
+            // 3-2. 글로벌 순서 불일치 계산 (전체 메시지의 kafka_timestamp 순서 vs 처리 순서)
+            List<ParticipationHistory> globalRecords = allRecords.stream()
+                    .filter(r -> r.getKafkaTimestamp() != null && r.getProcessingStartedAtNanos() != null)
+                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaTimestamp))
+                    .collect(Collectors.toList());
+
+            int totalOrderMismatches = 0;
+            int totalComparisons = 0;
+
+            for (int i = 0; i < globalRecords.size() - 1; i++) {
+                ParticipationHistory current = globalRecords.get(i);
+                ParticipationHistory next = globalRecords.get(i + 1);
+
+                totalComparisons++;
+
+                // kafka_timestamp 순서로 정렬했는데, 처리 순서(나노초)가 역전되면 순서 불일치
+                if (current.getProcessingStartedAtNanos() > next.getProcessingStartedAtNanos()) {
+                    totalOrderMismatches++;
                 }
             }
 
-            double orderAccuracy = records.size() > 1
-                ? 100.0 * (records.size() - 1 - orderMismatches) / (records.size() - 1)
-                : 100.0;
+            double orderAccuracy = totalComparisons > 0
+                    ? 100.0 * (totalComparisons - totalOrderMismatches) / totalComparisons
+                    : 100.0;
 
-            // 3. 파티션별 분포
-            Map<Integer, Long> partitionDistribution = records.stream()
-                    .filter(r -> r.getKafkaPartition() != null)
-                    .collect(Collectors.groupingBy(
-                            ParticipationHistory::getKafkaPartition,
-                            Collectors.counting()
+            // 4. 파티션별 메시지 분포
+            Map<Integer, Long> partitionDistribution = partitionGroups.entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            e -> (long) e.getValue().size()
                     ));
 
-            // 4. 샘플 데이터 (처음 50개)
-            List<Map<String, Object>> samples = records.stream()
-                    .limit(50)
-                    .map(r -> {
-                        Map<String, Object> sample = new HashMap<>();
-                        sample.put("offset", r.getKafkaOffset());
-                        sample.put("partition", r.getKafkaPartition());
-                        sample.put("userId", r.getUserId());
-                        sample.put("status", r.getStatus().toString());
-                        sample.put("processedAt", r.getCreatedAt().toString());
-                        sample.put("kafkaTimestamp", r.getKafkaTimestamp() != null
-                                ? Instant.ofEpochMilli(r.getKafkaTimestamp())
-                                        .atZone(ZoneId.of("Asia/Seoul"))
-                                        .toLocalDateTime()
-                                        .toString()
-                                : null);
-                        return sample;
-                    })
-                    .collect(Collectors.toList());
+            // 5. 샘플 데이터 (각 파티션에서 처음 10개씩, 순서 위반 케이스 포함)
+            List<Map<String, Object>> samples = new java.util.ArrayList<>();
+            for (Map.Entry<Integer, List<ParticipationHistory>> entry : partitionGroups.entrySet()) {
+                Integer partition = entry.getKey();
+                List<ParticipationHistory> partitionRecords = entry.getValue();
+
+                // offset 순서로 정렬
+                partitionRecords.sort(java.util.Comparator.comparing(ParticipationHistory::getKafkaOffset));
+
+                // 각 파티션에서 처음 10개만
+                for (int i = 0; i < Math.min(10, partitionRecords.size()); i++) {
+                    ParticipationHistory r = partitionRecords.get(i);
+                    Map<String, Object> sample = new HashMap<>();
+                    sample.put("partition", r.getKafkaPartition());
+                    sample.put("offset", r.getKafkaOffset());
+                    sample.put("userId", r.getUserId());
+                    sample.put("status", r.getStatus().toString());
+                    sample.put("kafkaTimestamp", r.getKafkaTimestamp() != null
+                            ? Instant.ofEpochMilli(r.getKafkaTimestamp())
+                                    .atZone(ZoneId.of("Asia/Seoul"))
+                                    .toLocalDateTime()
+                                    .toString()
+                            : null);
+                    sample.put("processedAt", r.getCreatedAt().toString());
+
+                    // 다음 레코드와 비교하여 순서 위반 여부 표시
+                    if (i < partitionRecords.size() - 1) {
+                        ParticipationHistory next = partitionRecords.get(i + 1);
+                        boolean orderViolation = r.getCreatedAt().isAfter(next.getCreatedAt());
+                        sample.put("orderViolation", orderViolation);
+                    } else {
+                        sample.put("orderViolation", false);
+                    }
+
+                    samples.add(sample);
+                }
+            }
 
             long endTime = System.currentTimeMillis();
             long duration = endTime - startTime;
 
-            // 5. 응답 데이터 구성
+            // 6. 응답 데이터 구성
             Map<String, Object> data = new HashMap<>();
             data.put("campaignId", campaignId);
             data.put("queryTimeMs", duration);
             data.put("summary", Map.of(
-                    "totalRecords", records.size(),
-                    "orderMismatches", orderMismatches,
+                    "totalRecords", allRecords.size(),
+                    "orderMismatches", totalOrderMismatches,
                     "orderAccuracy", String.format("%.2f%%", orderAccuracy),
-                    "partitionCount", partitionDistribution.size()
+                    "partitionCount", partitionGroups.size()
             ));
             data.put("partitionDistribution", partitionDistribution);
+            data.put("partitionMismatches", partitionMismatches);
             data.put("samples", samples);
 
-            log.info("📊 순서 분석 완료 - campaignId: {}, totalRecords: {}, orderAccuracy: {:.2f}%, queryTime: {}ms",
-                    campaignId, records.size(), orderAccuracy, duration);
+            log.info("📊 순서 분석 완료 - campaignId: {}, totalRecords: {}, partitions: {}, orderMismatches: {}, orderAccuracy: {:.2f}%, queryTime: {}ms",
+                    campaignId, allRecords.size(), partitionGroups.size(), totalOrderMismatches, orderAccuracy, duration);
 
             return ResponseEntity.ok(ApiResponse.success(data));
 

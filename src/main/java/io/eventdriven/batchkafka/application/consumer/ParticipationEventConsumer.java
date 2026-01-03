@@ -5,6 +5,7 @@ import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundExceptio
 import io.eventdriven.batchkafka.api.exception.infrastructure.DatabaseException;
 import io.eventdriven.batchkafka.api.exception.infrastructure.KafkaConsumeException;
 import io.eventdriven.batchkafka.application.event.ParticipationEvent;
+import io.eventdriven.batchkafka.application.service.ProcessingLogService;
 import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
 import io.eventdriven.batchkafka.domain.entity.ParticipationStatus;
@@ -36,9 +37,16 @@ public class ParticipationEventConsumer {
     private final CampaignRepository campaignRepository;
     private final ParticipationHistoryRepository participationHistoryRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ProcessingLogService processingLogService;
 
     private static final String DLQ_TOPIC = "campaign-participation-topic.dlq";
     private static final int MAX_RETRIES = 3;
+    private static final int LOG_INTERVAL = 1000; // 1000건마다 로그
+
+    // 처리 건수 카운터 (메모리 기반, 재시작 시 초기화)
+    private long processedCount = 0;
+    private long successCount = 0;
+    private long failCount = 0;
 
     @KafkaListener(
             topics = "campaign-participation-topic",
@@ -67,9 +75,12 @@ public class ParticipationEventConsumer {
                         event.getCampaignId(), event.getUserId(), event.getKafkaOffset(), event.getKafkaPartition());
 
                 // 3. 비즈니스 로직 실행
-                processParticipation(event);
+                ParticipationStatus status = processParticipation(event);
 
-                // 4. 성공 시 커밋 후 반환
+                // 4. 카운터 업데이트 및 로깅
+                updateCountersAndLog(event, status);
+
+                // 5. 성공 시 커밋 후 반환
                 acknowledgment.acknowledge();
                 log.info("✅ 메시지 처리 완료 및 커밋 - Campaign ID: {}, User ID: {}",
                         event.getCampaignId(), event.getUserId());
@@ -132,7 +143,7 @@ public class ParticipationEventConsumer {
     /**
      * 참여 처리 비즈니스 로직
      */
-    private void processParticipation(ParticipationEvent event) {
+    private ParticipationStatus processParticipation(ParticipationEvent event) {
         // 1. 원자적 재고 차감 (반환값: 0=재고 부족, 1=성공)
         int updatedRows = campaignRepository.decreaseStockAtomic(event.getCampaignId());
 
@@ -159,6 +170,33 @@ public class ParticipationEventConsumer {
                 event.getKafkaTimestamp()
         );
         participationHistoryRepository.save(history);
+
+        return status;
+    }
+
+    /**
+     * 카운터 업데이트 및 1000건마다 로그
+     */
+    private synchronized void updateCountersAndLog(ParticipationEvent event, ParticipationStatus status) {
+        processedCount++;
+
+        if (status == ParticipationStatus.SUCCESS) {
+            successCount++;
+        } else {
+            failCount++;
+        }
+
+        // 1000건마다 로그 기록
+        if (processedCount % LOG_INTERVAL == 0) {
+            String logMessage = String.format(
+                    "[Kafka Consumer] 처리 건수: %,d건 | 성공: %,d | 실패: %,d | 최근 처리: Campaign=%d, User=%d, Partition=%d, Offset=%d",
+                    processedCount, successCount, failCount,
+                    event.getCampaignId(), event.getUserId(),
+                    event.getKafkaPartition(), event.getKafkaOffset()
+            );
+            processingLogService.info(logMessage);
+            log.info("📊 " + logMessage);
+        }
     }
 
     /**
