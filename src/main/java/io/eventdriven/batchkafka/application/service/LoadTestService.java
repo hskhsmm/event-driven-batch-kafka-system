@@ -306,9 +306,25 @@ public class LoadTestService {
     private K6Config calculateK6Config(int totalRequests, String testType) {
         if (testType.equals("kafka")) {
             // Kafka: 응답이 빠름 (~15ms) → 짧은 시간에 많은 요청
-            int duration = 10; // 10초
+            // 현실적인 설정: duration을 동적으로 조정
+            int duration;
+            int maxVUs;
+
+            if (totalRequests <= 5000) {
+                duration = 1; // 소량: 1초에 몰아넣기 (순서 테스트용)
+                maxVUs = 5000;
+            } else if (totalRequests <= 15000) {
+                duration = 2; // 중량: 2초
+                maxVUs = 8000;
+            } else if (totalRequests <= 50000) {
+                duration = 5; // 대량: 5초
+                maxVUs = 10000;
+            } else {
+                duration = 10; // 초대량: 10초
+                maxVUs = 15000;
+            }
+
             int rate = totalRequests / duration; // 초당 요청 수
-            int maxVUs = Math.max(rate * 2, 1000); // rate의 2배 또는 최소 1000
 
             return new K6Config(rate, duration, maxVUs);
         } else {
