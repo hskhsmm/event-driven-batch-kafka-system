@@ -37,15 +37,16 @@ public interface ParticipationHistoryRepository extends JpaRepository<Participat
     Long countFailByCampaignId(@Param("campaignId") Long campaignId);
 
     /**
-     * 캠페인별 참여 이력 조회 (Kafka offset 순서대로, 순서 분석용)
+     * 캠페인별 참여 이력 조회 (Kafka 메시지 생성 시간 순서대로, 순서 분석용)
+     * kafka_timestamp 순서로 정렬하여 실제 메시지 생성 순서를 확인
      */
     @Query("""
         SELECT ph
         FROM ParticipationHistory ph
-        WHERE ph.campaign.id = :campaignId AND ph.kafkaOffset IS NOT NULL
-        ORDER BY ph.kafkaOffset ASC
+        WHERE ph.campaign.id = :campaignId AND ph.kafkaTimestamp IS NOT NULL
+        ORDER BY ph.kafkaTimestamp ASC
     """)
-    List<ParticipationHistory> findByCampaignIdOrderByKafkaOffsetAsc(@Param("campaignId") Long campaignId);
+    List<ParticipationHistory> findByCampaignIdOrderByKafkaTimestampAsc(@Param("campaignId") Long campaignId);
 
     /**
      * 캠페인별 최근 참여 이력 조회 (실시간 처리 성능 측정용)
