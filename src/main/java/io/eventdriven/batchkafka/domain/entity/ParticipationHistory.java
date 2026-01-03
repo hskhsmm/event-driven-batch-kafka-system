@@ -36,6 +36,10 @@ public class ParticipationHistory extends BaseTimeEntity {
     @Column(name = "kafka_timestamp")
     private Long kafkaTimestamp;
 
+    // 처리 시작 시간 (나노초 - 순서 분석용)
+    @Column(name = "processing_started_at_nanos")
+    private Long processingStartedAtNanos;
+
     // 기존 생성자 (하위 호환성)
     public ParticipationHistory(Campaign campaign, Long userId, ParticipationStatus status) {
         this.campaign = campaign;
@@ -52,5 +56,6 @@ public class ParticipationHistory extends BaseTimeEntity {
         this.kafkaOffset = kafkaOffset;
         this.kafkaPartition = kafkaPartition;
         this.kafkaTimestamp = kafkaTimestamp;
+        this.processingStartedAtNanos = System.nanoTime(); // 처리 시작 시간 기록
     }
 }
