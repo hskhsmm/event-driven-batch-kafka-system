@@ -49,6 +49,10 @@ dependencies {
 	// 역할: 입력된 캠페인 ID나 사용자 정보가 올바른 형식인지 자동으로 검증
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+	// [Spring AOP] 관점 지향 프로그래밍 라이브러리
+	// 역할: API 성능 측정, 로깅 등 횡단 관심사를 비즈니스 로직과 분리하여 처리
+	// Spring Boot 4.0부터 spring-boot-starter-aop → spring-boot-starter-aspectj로 변경
+	implementation 'org.springframework.boot:spring-boot-starter-aspectj'
 
 	// 헬스체크를 위한 의존성
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
