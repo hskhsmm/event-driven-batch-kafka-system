@@ -4,6 +4,8 @@ import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.CampaignStatus;
 import lombok.Getter;
 
+import java.time.LocalDateTime;
+
 @Getter
 public class CampaignResponse {
     private Long id;
@@ -11,6 +13,7 @@ public class CampaignResponse {
     private Long totalStock;
     private Long currentStock;
     private CampaignStatus status;
+    private LocalDateTime createdAt;  // 프론트엔드 CampaignManagement.tsx에서 테이블에 표시
 
     public CampaignResponse(Campaign campaign) {
         this.id = campaign.getId();
@@ -18,5 +21,6 @@ public class CampaignResponse {
         this.totalStock = campaign.getTotalStock();
         this.currentStock = campaign.getCurrentStock();
         this.status = campaign.getStatus();
+        this.createdAt = campaign.getCreatedAt();
     }
 }
