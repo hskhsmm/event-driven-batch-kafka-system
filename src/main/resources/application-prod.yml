@@ -11,6 +11,15 @@ management:
       enabled: false   #  Actuator Kafka Health 완전 제거
 
 spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate  # 프로덕션에서는 validate 또는 none 권장
+    show-sql: false       # 프로덕션에서는 로깅 최소화
+    properties:
+      hibernate:
+        format_sql: false
+        default_batch_fetch_size: 100  # N+1 문제 방지
+
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}        #
     listener:
