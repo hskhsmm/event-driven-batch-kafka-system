@@ -29,7 +29,7 @@ spring:
 
   batch:
     job:
-      enabled: true             #  Batch 자동 실행
+      enabled: false             #  Batch 자동 실행 차단
 
 
 # 테스트 후 재 활성화 예정
