@@ -1014,7 +1014,7 @@ docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
 
 ---
 
-#### 테스트 1: 파티션 1개
+#### 테스트 1: 파티션 1개 (기준선)
 
 ```bash
 # 1. 파티션 1개로 설정
@@ -1024,46 +1024,135 @@ docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
 
 # 2. 애플리케이션 재시작 (Consumer 재연결)
 
-# 3. 10,000건 메시지 발행
+# 3. 캠페인 생성 (재고 50개)
+curl -X POST http://localhost:8080/api/admin/campaigns \
+  -H "Content-Type: application/json" \
+  -d '{"name": "파티션1 테스트", "totalStock": 50}'
+
+# 4. 10,000건 메시지 발행
 curl -X POST http://localhost:8080/api/admin/test/participate-bulk \
   -H "Content-Type: application/json" \
   -d '{"count": 10000, "campaignId": 1}'
 
-# 4. 처리 완료 대기 (약 12초)
+# 5. 처리 완료 대기 (약 12초)
 
-# 5. 순서 분석 API 호출
+# 6. 순서 분석 API 호출
 curl "http://localhost:8080/api/admin/stats/order-analysis/1"
 ```
 
-**예상 결과**:
+**📊 측정 결과**:
 
-```json
-{
-  "summary": {
-    "totalRecords": 10000,
-    "orderMismatches": 0,
-    "orderAccuracy": "100.00%",
-    "partitionCount": 1
-  },
-  "partitionDistribution": {
-    "0": 10000
-  },
-  "partitionMismatches": {
-    "0": 0
-  }
-}
-```
+| 지표 | 측정값 |
+|------|--------|
+| 처리 시간 | _____초 |
+| 처리량 (TPS) | _____ msg/s |
+| 순서 정확도 | _____% |
+| 순서 불일치 | _____건 |
+| 재고 정합성 | ___/50개 SUCCESS |
 
-**핵심 지표**:
-- ✅ **순서 정확도: 100%** (완벽)
-- ✅ **순서 불일치: 0건**
-- ✅ **재고 정합성: 정확히 50개 SUCCESS**
-- ⚠️ **처리 시간: 12초** (느림)
-- ⚠️ **처리량: 833 msg/s**
+**📸 스크린샷 첨부**
+
+![파티션 1개 - 순서 분석 API 결과](./docs/images/experiment2-partition1-order-analysis.png)
+![파티션 1개 - 처리 로그](./docs/images/experiment2-partition1-log.png)
+![파티션 1개 - Kafka UI](./docs/images/experiment2-partition1-kafka-ui.png)
 
 ---
 
-#### 테스트 2: 파티션 4개
+#### 테스트 2: 파티션 2개
+
+```bash
+# 1. Topic 삭제 후 파티션 2개로 재생성
+docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+  --delete --topic campaign-participation-topic
+
+docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --topic campaign-participation-topic \
+  --partitions 2 --replication-factor 1
+
+# 2. 애플리케이션 재시작
+
+# 3. 캠페인 생성 (재고 50개)
+curl -X POST http://localhost:8080/api/admin/campaigns \
+  -H "Content-Type: application/json" \
+  -d '{"name": "파티션2 테스트", "totalStock": 50}'
+
+# 4. 10,000건 메시지 발행
+curl -X POST http://localhost:8080/api/admin/test/participate-bulk \
+  -H "Content-Type: application/json" \
+  -d '{"count": 10000, "campaignId": 2}'
+
+# 5. 처리 완료 대기 (약 6초)
+
+# 6. 순서 분석 API 호출
+curl "http://localhost:8080/api/admin/stats/order-analysis/2"
+```
+
+**📊 측정 결과**:
+
+| 지표 | 측정값 |
+|------|--------|
+| 처리 시간 | _____초 |
+| 처리량 (TPS) | _____ msg/s |
+| 순서 정확도 | _____% |
+| 순서 불일치 | _____건 |
+| 재고 정합성 | ___/50개 SUCCESS |
+
+**📸 스크린샷 첨부**
+
+![파티션 2개 - 순서 분석 API 결과](./docs/images/experiment2-partition2-order-analysis.png)
+![파티션 2개 - 처리 로그](./docs/images/experiment2-partition2-log.png)
+![파티션 2개 - Kafka UI](./docs/images/experiment2-partition2-kafka-ui.png)
+
+---
+
+#### 테스트 3: 파티션 3개
+
+```bash
+# 1. Topic 삭제 후 파티션 3개로 재생성
+docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+  --delete --topic campaign-participation-topic
+
+docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --topic campaign-participation-topic \
+  --partitions 3 --replication-factor 1
+
+# 2. 애플리케이션 재시작
+
+# 3. 캠페인 생성 (재고 50개)
+curl -X POST http://localhost:8080/api/admin/campaigns \
+  -H "Content-Type: application/json" \
+  -d '{"name": "파티션3 테스트", "totalStock": 50}'
+
+# 4. 10,000건 메시지 발행
+curl -X POST http://localhost:8080/api/admin/test/participate-bulk \
+  -H "Content-Type: application/json" \
+  -d '{"count": 10000, "campaignId": 3}'
+
+# 5. 처리 완료 대기 (약 4초)
+
+# 6. 순서 분석 API 호출
+curl "http://localhost:8080/api/admin/stats/order-analysis/3"
+```
+
+**📊 측정 결과**:
+
+| 지표 | 측정값 |
+|------|--------|
+| 처리 시간 | _____초 |
+| 처리량 (TPS) | _____ msg/s |
+| 순서 정확도 | _____% |
+| 순서 불일치 | _____건 |
+| 재고 정합성 | ___/50개 SUCCESS |
+
+**📸 스크린샷 첨부**
+
+![파티션 3개 - 순서 분석 API 결과](./docs/images/experiment2-partition3-order-analysis.png)
+![파티션 3개 - 처리 로그](./docs/images/experiment2-partition3-log.png)
+![파티션 3개 - Kafka UI](./docs/images/experiment2-partition3-kafka-ui.png)
+
+---
+
+#### 테스트 4: 파티션 4개
 
 ```bash
 # 1. Topic 삭제 후 파티션 4개로 재생성
@@ -1084,68 +1173,94 @@ curl -X POST http://localhost:8080/api/admin/campaigns \
 # 4. 10,000건 메시지 발행
 curl -X POST http://localhost:8080/api/admin/test/participate-bulk \
   -H "Content-Type: application/json" \
-  -d '{"count": 10000, "campaignId": 2}'
+  -d '{"count": 10000, "campaignId": 4}'
 
 # 5. 처리 완료 대기 (약 3초)
 
 # 6. 순서 분석 API 호출
-curl "http://localhost:8080/api/admin/stats/order-analysis/2"
+curl "http://localhost:8080/api/admin/stats/order-analysis/4"
 ```
 
-**예상 결과**:
+**📊 측정 결과**:
 
-```json
-{
-  "summary": {
-    "totalRecords": 10000,
-    "orderMismatches": 523,
-    "orderAccuracy": "94.77%",
-    "partitionCount": 4
-  },
-  "partitionDistribution": {
-    "0": 2501,
-    "1": 2498,
-    "2": 2503,
-    "3": 2498
-  },
-  "partitionMismatches": {
-    "0": 120,
-    "1": 135,
-    "2": 125,
-    "3": 143
-  },
-  "samples": [
-    {
-      "partition": 1,
-      "offset": 2,
-      "userId": 456,
-      "status": "SUCCESS",
-      "kafkaTimestamp": "2025-12-28T10:00:00.040",
-      "processedAt": "2025-12-28T10:00:00.030",
-      "orderViolation": true
-    }
-  ]
-}
+| 지표 | 측정값 |
+|------|--------|
+| 처리 시간 | _____초 |
+| 처리량 (TPS) | _____ msg/s |
+| 순서 정확도 | _____% |
+| 순서 불일치 | _____건 |
+| 재고 정합성 | ___/50개 SUCCESS |
+
+**📸 스크린샷 첨부**
+
+![파티션 4개 - 순서 분석 API 결과](./docs/images/experiment2-partition4-order-analysis.png)
+![파티션 4개 - 처리 로그](./docs/images/experiment2-partition4-log.png)
+![파티션 4개 - Kafka UI](./docs/images/experiment2-partition4-kafka-ui.png)
+
+---
+
+#### 테스트 5: 파티션 8개
+
+```bash
+# 1. Topic 삭제 후 파티션 8개로 재생성
+docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+  --delete --topic campaign-participation-topic
+
+docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --topic campaign-participation-topic \
+  --partitions 8 --replication-factor 1
+
+# 2. 애플리케이션 재시작
+
+# 3. 캠페인 생성 (재고 50개)
+curl -X POST http://localhost:8080/api/admin/campaigns \
+  -H "Content-Type: application/json" \
+  -d '{"name": "파티션8 테스트", "totalStock": 50}'
+
+# 4. 10,000건 메시지 발행
+curl -X POST http://localhost:8080/api/admin/test/participate-bulk \
+  -H "Content-Type: application/json" \
+  -d '{"count": 10000, "campaignId": 5}'
+
+# 5. 처리 완료 대기 (약 1.5초)
+
+# 6. 순서 분석 API 호출
+curl "http://localhost:8080/api/admin/stats/order-analysis/5"
 ```
 
-**핵심 지표**:
-- ❌ **순서 정확도: 94.77%** (5.23% 순서 위반)
-- ❌ **순서 불일치: 523건** (파티션 간 경합)
-- ✅ **재고 정합성: 정확히 50개 SUCCESS** (Atomic UPDATE 덕분)
-- ✅ **처리 시간: 3초** (빠름)
-- ✅ **처리량: 3,333 msg/s** (4배 향상)
+**📊 측정 결과**:
+
+| 지표 | 측정값 |
+|------|--------|
+| 처리 시간 | _____초 |
+| 처리량 (TPS) | _____ msg/s |
+| 순서 정확도 | _____% |
+| 순서 불일치 | _____건 |
+| 재고 정합성 | ___/50개 SUCCESS |
+
+**📸 스크린샷 첨부**
+
+![파티션 8개 - 순서 분석 API 결과](./docs/images/experiment2-partition8-order-analysis.png)
+![파티션 8개 - 처리 로그](./docs/images/experiment2-partition8-log.png)
+![파티션 8개 - Kafka UI](./docs/images/experiment2-partition8-kafka-ui.png)
 
 ---
 
 #### 종합 비교
 
-| 지표 | 파티션 1개 | 파티션 4개 | 비교 |
-|------|-----------|-----------|------|
-| **처리 시간** | 12초 | 3초 | 🚀 **4배 빠름** |
-| **처리량 (TPS)** | 833 msg/s | 3,333 msg/s | 🚀 **4배 향상** |
-| **순서 정확도** | 100.00% | 94.77% | ⚠️ **5.23% 위반** |
-| **순서 불일치** | 0건 | 523건 | ❌ **순서 보장 실패** |
-| **재고 정합성** | ✅ 50개 | ✅ 50개 | ✅ **동일** |
+| 파티션 개수 | 처리 시간 | 처리량 (TPS) | 순서 정확도 | 순서 불일치 | 재고 정합성 | 선택 |
+|------------|----------|--------------|------------|------------|-----------|-----|
+| **1개** | _____초 | _____ msg/s | _____% | _____건 | ___/50개 | ✅ **채택** |
+| **2개** | _____초 | _____ msg/s | _____% | _____건 | ___/50개 | - |
+| **3개** | _____초 | _____ msg/s | _____% | _____건 | ___/50개 | - |
+| **4개** | _____초 | _____ msg/s | _____% | _____건 | ___/50개 | - |
+| **8개** | _____초 | _____ msg/s | _____% | _____건 | ___/50개 | - |
+
+**📊 종합 분석 그래프**
+
+![처리 시간 vs 파티션 개수](./docs/images/experiment2-processing-time-chart.png)
+![순서 정확도 vs 파티션 개수](./docs/images/experiment2-order-accuracy-chart.png)
+![처리량 vs 파티션 개수](./docs/images/experiment2-throughput-chart.png)
 
 ---
 
@@ -1251,20 +1366,40 @@ done
 
 ### 📊 실험 결과 정리 체크리스트
 
-- [ ] 실험 1: 동기 vs Kafka 비교 완료
+- [ ] **실험 1: 동기 vs Kafka 비교 완료**
   - [ ] k6 결과 스크린샷 첨부
   - [ ] 정합성 검증 SQL 결과 첨부
+  - [ ] 성능 비교 그래프 작성
 
-- [ ] 실험 2: 파티션 개수 비교 완료
-  - [ ] 파티션 1개 결과 첨부
-  - [ ] 파티션 4개 결과 첨부
-  - [ ] 순서 분석 API 결과 첨부
-  - [ ] 종합 비교 테이블 작성
+- [ ] **실험 2: 파티션 개수 비교 완료**
+  - [ ] 파티션 1개 테스트 완료
+    - [ ] 순서 분석 API 결과 첨부
+    - [ ] 처리 로그 스크린샷
+    - [ ] Kafka UI 스크린샷
+  - [ ] 파티션 2개 테스트 완료
+    - [ ] 순서 분석 API 결과 첨부
+    - [ ] 처리 로그 스크린샷
+    - [ ] Kafka UI 스크린샷
+  - [ ] 파티션 3개 테스트 완료
+    - [ ] 순서 분석 API 결과 첨부
+    - [ ] 처리 로그 스크린샷
+    - [ ] Kafka UI 스크린샷
+  - [ ] 파티션 4개 테스트 완료
+    - [ ] 순서 분석 API 결과 첨부
+    - [ ] 처리 로그 스크린샷
+    - [ ] Kafka UI 스크린샷
+  - [ ] 파티션 8개 테스트 완료
+    - [ ] 순서 분석 API 결과 첨부
+    - [ ] 처리 로그 스크린샷
+    - [ ] Kafka UI 스크린샷
+  - [ ] 종합 비교 테이블 작성 완료
+  - [ ] 분석 그래프 작성 (처리 시간, 순서 정확도, 처리량)
 
-- [ ] 실험 3: 배치 성능 비교 완료
+- [ ] **실험 3: 배치 성능 비교 완료**
   - [ ] 원본 집계 결과 첨부
   - [ ] 배치 집계 결과 첨부
   - [ ] 성능 개선율 계산
+  - [ ] 비교 그래프 작성
 
 ---
 
@@ -1275,15 +1410,32 @@ done
    - 여러 번 실행 후 평균값 사용
    - 백그라운드 프로세스 최소화
 
-2. **스크린샷 촬영**:
-   - k6 결과: 터미널 전체 캡처
-   - Kafka UI: http://localhost:8081
-   - DB 쿼리: MySQL Workbench 또는 DBeaver
-   - 애플리케이션 로그: IntelliJ/VSCode 콘솔
+2. **스크린샷 저장 경로 설정**:
+   ```bash
+   # 프로젝트 루트에서 실행
+   mkdir -p docs/images
+   ```
+   - 실험 1: `docs/images/experiment1-*.png`
+   - 실험 2: `docs/images/experiment2-partition{N}-*.png`
+   - 실험 3: `docs/images/experiment3-*.png`
 
-3. **Kafka UI 확인 사항**:
-   - Topic → Partitions 탭에서 파티션별 offset 확인
-   - Consumer 탭에서 처리 속도 확인
+3. **스크린샷 촬영**:
+   - **k6 결과**: 터미널 전체 캡처
+   - **순서 분석 API**: Postman 또는 curl 결과 캡처
+   - **Kafka UI**: http://localhost:8081
+     - Topic → Partitions 탭에서 파티션별 offset 확인
+     - Consumer 탭에서 처리 속도 확인
+   - **DB 쿼리**: MySQL Workbench 또는 DBeaver
+   - **애플리케이션 로그**: IntelliJ/VSCode 콘솔
+
+4. **측정값 기록**:
+   - 각 테스트마다 측정 결과 표에 기록
+   - 순서 분석 API 응답의 주요 지표 기록
+     - `totalRecords`
+     - `orderMismatches`
+     - `orderAccuracy`
+     - `partitionCount`
+   - 처리 시작/완료 시간 기록 (처리 시간 계산용)
 
 ---
 
