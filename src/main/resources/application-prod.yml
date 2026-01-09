@@ -23,13 +23,13 @@ spring:
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}        #
     listener:
-      auto-startup: false        #  Consumer 기동 차단
+      auto-startup: true        #  Consumer 기동
     admin:
-      auto-create: false         # (있어도 되고 없어도 됨)
+      auto-create: true         # (있어도 되고 없어도 됨)
 
   batch:
     job:
-      enabled: false             #  Batch 자동 실행 차단
+      enabled: true             #  Batch 자동 실행
 
 
 # 테스트 후 재 활성화 예정
