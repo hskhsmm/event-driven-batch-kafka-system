@@ -1,6 +1,6 @@
 package io.eventdriven.batchkafka.application.consumer;
 
-import tools.jackson.core.JsonProcessingException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundException;
 import io.eventdriven.batchkafka.application.event.ParticipationEvent;
@@ -20,7 +20,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
