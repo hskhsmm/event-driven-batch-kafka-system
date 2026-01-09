@@ -114,6 +114,7 @@ public class KafkaConfig {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
+        factory.setBatchListener(true); // 👈 배치 리스너 활성화
 
         // 토픽의 파티션 수를 자동 감지해서 concurrency 설정
         int partitionCount = getTopicPartitionCount(TOPIC_NAME);
