@@ -58,10 +58,19 @@ public class ParticipationTestService {
 
                 successCount++;
 
-                // 진행 상황 로그 (1000건마다)
+                // 진행 상황 로그 및 백프레셔 (1000건마다)
                 if ((i + 1) % 1000 == 0) {
                     log.info("📤 {:,} / {:,} 건 발행 완료 ({:.1f}%)",
                             (i + 1), count, ((i + 1) * 100.0 / count));
+
+                    // 백프레셔: Kafka 버퍼가 숨 돌릴 시간 제공
+                    try {
+                        Thread.sleep(100);  // 100ms 대기
+                        log.debug("💤 백프레셔: 100ms 대기 (버퍼 안정화)");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.warn("⚠️ 백프레셔 대기 중 인터럽트 발생");
+                    }
                 }
 
             } catch (Exception e) {

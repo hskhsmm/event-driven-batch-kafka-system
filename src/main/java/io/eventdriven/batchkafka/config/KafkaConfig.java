@@ -65,6 +65,13 @@ public class KafkaConfig {
         configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // 멱등성 보장 (중복 방지)
         configProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE); // 실패 시 무한 재시도
 
+        // 성능 최적화 설정 (EC2 t3.small 2GB 최적화)
+        configProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 64 * 1024 * 1024); // 64MB (2GB 서버에 적합)
+        configProps.put(ProducerConfig.BATCH_SIZE_CONFIG, 32 * 1024);          // 32KB (묶음 전송 효율)
+        configProps.put(ProducerConfig.LINGER_MS_CONFIG, 10);                  // 10ms (배치 유도)
+        configProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy");     // Snappy 압축 (메모리 2~3배 절약)
+        configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 3000);             // 3초만 대기 (빠른 실패)
+
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 
