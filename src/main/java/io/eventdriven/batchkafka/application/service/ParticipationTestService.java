@@ -38,6 +38,10 @@ public class ParticipationTestService {
     public void simulate(Long campaignId, int count) {
         log.info("📊 시뮬레이션 시작 - 캠페인 ID: {}, 총 {:,}건", campaignId, count);
 
+        // 요청 규모에 따라 백프레셔 간격 동적 조정
+        int backpressureInterval = calculateBackpressureInterval(count);
+        log.info("💤 백프레셔 설정 - {}건마다 200ms 대기", backpressureInterval);
+
         long startTime = System.currentTimeMillis();
         int successCount = 0;
         int failCount = 0;
@@ -58,8 +62,8 @@ public class ParticipationTestService {
 
                 successCount++;
 
-                // 진행 상황 로그 및 백프레셔 (1000건마다)
-                if ((i + 1) % 1000 == 0) {
+                // 진행 상황 로그 및 백프레셔 (동적 간격)
+                if ((i + 1) % backpressureInterval == 0) {
                     log.info("📤 {:,} / {:,} 건 발행 완료 ({:.1f}%)",
                             (i + 1), count, ((i + 1) * 100.0 / count));
 
@@ -89,5 +93,26 @@ public class ParticipationTestService {
         log.info("   - 실패: {:,}건", failCount);
         log.info("   - 소요 시간: {:,}ms ({:.2f}초)", duration, duration / 1000.0);
         log.info("   - 처리량: {:.0f} 건/초", throughput);
+    }
+
+    /**
+     * 요청 규모에 따라 백프레셔 간격 동적 계산
+     *
+     * 소량 요청: 촘촘한 백프레셔 (안정성 중시)
+     * 대량 요청: 넓은 백프레셔 (처리량 중시)
+     *
+     * @param totalRequests 총 요청 수
+     * @return 백프레셔 간격 (건수)
+     */
+    private int calculateBackpressureInterval(int totalRequests) {
+        if (totalRequests <= 10000) {
+            return 1000;  // 1,000건마다 (EC2 2GB 안정성 우선)
+        } else if (totalRequests <= 50000) {
+            return 2000;  // 2,000건마다 (균형)
+        } else if (totalRequests <= 200000) {
+            return 5000;  // 5,000건마다 (처리량 우선)
+        } else {
+            return 10000; // 10,000건마다 (대용량 처리)
+        }
     }
 }
