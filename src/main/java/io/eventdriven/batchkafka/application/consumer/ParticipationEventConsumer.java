@@ -47,6 +47,9 @@ public class ParticipationEventConsumer {
     private long successCount = 0;
     private long failCount = 0;
 
+    // 처리 순서 번호 (순서 보장 증명용)
+    private final java.util.concurrent.atomic.AtomicLong processingSequence = new java.util.concurrent.atomic.AtomicLong(0);
+
     @KafkaListener(
             topics = "campaign-participation-topic",
             groupId = "campaign-participation-group",
@@ -85,7 +88,11 @@ public class ParticipationEventConsumer {
             event.setKafkaPartition(record.partition());
             event.setKafkaTimestamp(record.timestamp());
 
-            // 3. 비즈니스 로직 실행
+            // 3. 처리 순서 번호 부여 (순서 보장 증명용 - Consumer가 처리하는 순서)
+            long sequence = processingSequence.incrementAndGet();
+            event.setProcessingSequence(sequence);
+
+            // 4. 비즈니스 로직 실행
             ParticipationStatus status = processParticipation(event);
 
             // 4. 카운터 업데이트 및 로깅
@@ -127,7 +134,7 @@ public class ParticipationEventConsumer {
             status = ParticipationStatus.FAIL;
         }
 
-        // 2. 참여 이력 저장 (Kafka 메타데이터 포함)
+        // 2. 참여 이력 저장 (Kafka 메타데이터 + 처리 순서 번호 포함)
         Campaign campaign = campaignRepository.findById(event.getCampaignId())
                 .orElseThrow(() -> new CampaignNotFoundException(event.getCampaignId()));
         ParticipationHistory history = new ParticipationHistory(
@@ -136,7 +143,8 @@ public class ParticipationEventConsumer {
                 status,
                 event.getKafkaOffset(),
                 event.getKafkaPartition(),
-                event.getKafkaTimestamp()
+                event.getKafkaTimestamp(),
+                event.getProcessingSequence() // 처리 순서 번호 (순서 보장 증명)
         );
         participationHistoryRepository.save(history);
 
