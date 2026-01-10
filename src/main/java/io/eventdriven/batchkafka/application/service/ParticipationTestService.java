@@ -65,8 +65,8 @@ public class ParticipationTestService {
 
                     // 백프레셔: Kafka 버퍼가 숨 돌릴 시간 제공
                     try {
-                        Thread.sleep(100);  // 100ms 대기
-                        log.debug("💤 백프레셔: 100ms 대기 (버퍼 안정화)");
+                        Thread.sleep(200);  // 200ms 대기 (EC2 2GB 최적화)
+                        log.debug("💤 백프레셔: 200ms 대기 (버퍼 안정화)");
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         log.warn("⚠️ 백프레셔 대기 중 인터럽트 발생");

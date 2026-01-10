@@ -7,9 +7,11 @@ services:
     container_name: batch-kafka-app
     ports:
       - "8080:8080"
+    mem_limit: 1.5g
+    memswap_limit: 1.5g
     environment:
-      # JVM 메모리 제한 (t3.small 2GB 최적화)
-      JAVA_TOOL_OPTIONS: -Xms512m -Xmx1024m -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
+      # JVM 메모리 제한 (t3.small 2GB 최적화 - 여유 확보)
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx768m -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
     env_file:
       - /opt/batch-kafka/.env.prod
     restart: unless-stopped
