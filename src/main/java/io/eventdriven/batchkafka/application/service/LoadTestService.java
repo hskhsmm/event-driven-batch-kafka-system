@@ -311,29 +311,29 @@ public class LoadTestService {
             int maxVUs;
 
             if (totalRequests <= 5000) {
-                duration = 1; // 소량: 1초에 몰아넣기 (순서 테스트용)
+                duration = 10; // 소량: 10초 (백프레셔 고려)
                 maxVUs = 5000;
             } else if (totalRequests <= 15000) {
-                duration = 2; // 중량: 2초
+                duration = 30; // 중량: 30초 (백프레셔 200ms 고려)
                 maxVUs = 8000;
             } else if (totalRequests <= 50000) {
-                duration = 5; // 대량: 5초
+                duration = 60; // 대량: 60초
                 maxVUs = 10000;
             } else if (totalRequests <= 100000) {
-                duration = 10; // 10만: 10초
+                duration = 300; // 10만: 300초 (5분) - 백프레셔 5,000건마다
                 maxVUs = 15000;
             } else if (totalRequests <= 500000) {
-                duration = 30; // 50만: 30초 (16,666/s)
+                duration = 1200; // 50만: 1200초 (20분) - 백프레셔 5,000건마다
                 maxVUs = 20000;
             } else if (totalRequests <= 1000000) {
-                duration = 60; // 100만: 60초 (16,666/s)
+                duration = 2400; // 100만: 2400초 (40분) - 백프레셔 10,000건마다
                 maxVUs = 25000;
             } else if (totalRequests <= 3000000) {
-                duration = 180; // 300만: 3분 (16,666/s)
+                duration = 7200; // 300만: 7200초 (2시간) - 백프레셔 10,000건마다
                 maxVUs = 30000;
             } else {
-                // 300만 초과: 5분에 걸쳐 분산 (최대 안정성)
-                duration = 300;
+                // 300만 초과: 3시간 (최대 안정성)
+                duration = 10800; // 3시간
                 maxVUs = 30000;
             }
 
