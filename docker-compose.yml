@@ -87,7 +87,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Asia/Seoul
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx768m -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=128m -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
     ports:
       - "8080:8080"
     networks:
