@@ -326,24 +326,31 @@ public class StatsController {
                 partitionMismatches.put(partition, partitionMismatch);
             }
 
-            // 3-2. 글로벌 순서 불일치 계산 (전체 메시지의 kafka_timestamp 순서 vs 처리 순서)
-            List<ParticipationHistory> globalRecords = allRecords.stream()
-                    .filter(r -> r.getKafkaTimestamp() != null && r.getProcessingStartedAtNanos() != null)
-                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaTimestamp))
-                    .collect(Collectors.toList());
-
+            // 3-2. 글로벌 순서 불일치 계산 (파티션별 kafka_offset 순서 vs 처리 순서 번호)
             int totalOrderMismatches = 0;
             int totalComparisons = 0;
 
-            for (int i = 0; i < globalRecords.size() - 1; i++) {
-                ParticipationHistory current = globalRecords.get(i);
-                ParticipationHistory next = globalRecords.get(i + 1);
+            // 파티션별로 순서 확인 (파티션 내에서 offset 순서 = 처리 순서여야 함)
+            for (Map.Entry<Integer, List<ParticipationHistory>> entry : partitionGroups.entrySet()) {
+                List<ParticipationHistory> partitionRecords = entry.getValue();
 
-                totalComparisons++;
+                // processingSequence가 있는 레코드만 (최신 데이터)
+                List<ParticipationHistory> recordsWithSeq = partitionRecords.stream()
+                        .filter(r -> r.getProcessingSequence() != null)
+                        .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaOffset))
+                        .collect(Collectors.toList());
 
-                // kafka_timestamp 순서로 정렬했는데, 처리 순서(나노초)가 역전되면 순서 불일치
-                if (current.getProcessingStartedAtNanos() > next.getProcessingStartedAtNanos()) {
-                    totalOrderMismatches++;
+                for (int i = 0; i < recordsWithSeq.size() - 1; i++) {
+                    ParticipationHistory current = recordsWithSeq.get(i);
+                    ParticipationHistory next = recordsWithSeq.get(i + 1);
+
+                    totalComparisons++;
+
+                    // kafka_offset 순서로 정렬했는데, processingSequence가 역전되면 순서 불일치!
+                    // (파티션 내에서 offset이 작으면 processingSequence도 작아야 함)
+                    if (current.getProcessingSequence() > next.getProcessingSequence()) {
+                        totalOrderMismatches++;
+                    }
                 }
             }
 
@@ -375,6 +382,7 @@ public class StatsController {
                     sample.put("offset", r.getKafkaOffset());
                     sample.put("userId", r.getUserId());
                     sample.put("status", r.getStatus().toString());
+                    sample.put("processingSequence", r.getProcessingSequence()); // 처리 순서 번호
                     sample.put("kafkaTimestamp", r.getKafkaTimestamp() != null
                             ? Instant.ofEpochMilli(r.getKafkaTimestamp())
                                     .atZone(ZoneId.of("Asia/Seoul"))
@@ -386,7 +394,13 @@ public class StatsController {
                     // 다음 레코드와 비교하여 순서 위반 여부 표시
                     if (i < partitionRecords.size() - 1) {
                         ParticipationHistory next = partitionRecords.get(i + 1);
-                        boolean orderViolation = r.getCreatedAt().isAfter(next.getCreatedAt());
+                        // processingSequence가 있으면 그걸로 비교, 없으면 createdAt으로 비교
+                        boolean orderViolation = false;
+                        if (r.getProcessingSequence() != null && next.getProcessingSequence() != null) {
+                            orderViolation = r.getProcessingSequence() > next.getProcessingSequence();
+                        } else {
+                            orderViolation = r.getCreatedAt().isAfter(next.getCreatedAt());
+                        }
                         sample.put("orderViolation", orderViolation);
                     } else {
                         sample.put("orderViolation", false);

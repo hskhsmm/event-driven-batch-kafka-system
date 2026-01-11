@@ -40,6 +40,10 @@ public class ParticipationHistory extends BaseTimeEntity {
     @Column(name = "processing_started_at_nanos")
     private Long processingStartedAtNanos;
 
+    // 처리 순서 번호 (Consumer가 처리한 순서, 완벽한 순서 보장 증명용)
+    @Column(name = "processing_sequence")
+    private Long processingSequence;
+
     // 기존 생성자 (하위 호환성)
     public ParticipationHistory(Campaign campaign, Long userId, ParticipationStatus status) {
         this.campaign = campaign;
@@ -49,7 +53,8 @@ public class ParticipationHistory extends BaseTimeEntity {
 
     // Kafka 메타데이터 포함 생성자
     public ParticipationHistory(Campaign campaign, Long userId, ParticipationStatus status,
-                                Long kafkaOffset, Integer kafkaPartition, Long kafkaTimestamp) {
+                                Long kafkaOffset, Integer kafkaPartition, Long kafkaTimestamp,
+                                Long processingSequence) {
         this.campaign = campaign;
         this.userId = userId;
         this.status = status;
@@ -57,5 +62,6 @@ public class ParticipationHistory extends BaseTimeEntity {
         this.kafkaPartition = kafkaPartition;
         this.kafkaTimestamp = kafkaTimestamp;
         this.processingStartedAtNanos = System.nanoTime(); // 처리 시작 시간 기록
+        this.processingSequence = processingSequence; // 처리 순서 번호 (완벽한 순서 보장)
     }
 }
