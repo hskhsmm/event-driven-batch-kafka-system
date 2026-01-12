@@ -106,13 +106,15 @@ public class ParticipationTestService {
      */
     private int calculateBackpressureInterval(int totalRequests) {
         if (totalRequests <= 10000) {
-            return 1000;  // 1,000건마다 (EC2 2GB 안정성 우선)
-        } else if (totalRequests <= 50000) {
-            return 2000;  // 2,000건마다 (균형)
+            return 1000;  // 1,000건마다 (안정성 최우선)
+        } else if (totalRequests <= 30000) {
+            return 1000;  // 1,000건마다 (10만 트래픽 대비 안정성 유지)
+        } else if (totalRequests <= 100000) {
+            return 1500;  // 1,500건마다 (10만 트래픽 최적화)
         } else if (totalRequests <= 200000) {
-            return 5000;  // 5,000건마다 (처리량 우선)
+            return 3000;  // 3,000건마다 (대용량 처리)
         } else {
-            return 10000; // 10,000건마다 (대용량 처리)
+            return 5000;  // 5,000건마다 (초대용량 처리)
         }
     }
 }

@@ -7,11 +7,11 @@ services:
     container_name: batch-kafka-app
     ports:
       - "8080:8080"
-    mem_limit: 1.5g
-    memswap_limit: 1.5g
+    mem_limit: 6g
+    memswap_limit: 6g
     environment:
-      # JVM 메모리 제한 (t3.small 2GB 최적화 - Native Memory 포함)
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=128m -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
+      # JVM 메모리 제한 (t3.large 8GB 최적화 - 10만 트래픽 처리)
+      JAVA_TOOL_OPTIONS: -Xms1g -Xmx4g -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=256m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
     env_file:
       - /opt/batch-kafka/.env.prod
     restart: unless-stopped
