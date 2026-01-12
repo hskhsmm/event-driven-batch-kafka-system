@@ -40,7 +40,7 @@ public class ParticipationTestService {
 
         // 요청 규모에 따라 백프레셔 간격 동적 조정
         int backpressureInterval = calculateBackpressureInterval(count);
-        log.info("💤 백프레셔 설정 - {}건마다 200ms 대기", backpressureInterval);
+        log.info("💤 백프레셔 설정 - {}건마다 500ms 대기", backpressureInterval);
 
         long startTime = System.currentTimeMillis();
         int successCount = 0;
@@ -69,8 +69,8 @@ public class ParticipationTestService {
 
                     // 백프레셔: Kafka 버퍼가 숨 돌릴 시간 제공
                     try {
-                        Thread.sleep(200);  // 200ms 대기 (EC2 2GB 최적화)
-                        log.debug("💤 백프레셔: 200ms 대기 (버퍼 안정화)");
+                        Thread.sleep(500);  // 500ms 대기 (Consumer 처리 시간 확보)
+                        log.debug("💤 백프레셔: 500ms 대기 (버퍼 안정화)");
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         log.warn("⚠️ 백프레셔 대기 중 인터럽트 발생");
@@ -106,11 +106,13 @@ public class ParticipationTestService {
      */
     private int calculateBackpressureInterval(int totalRequests) {
         if (totalRequests <= 10000) {
-            return 1000;  // 1,000건마다 (안정성 최우선)
+            return 500;  // 500건마다 (안정성 최우선)
         } else if (totalRequests <= 30000) {
-            return 1000;  // 1,000건마다 (10만 트래픽 대비 안정성 유지)
+            return 700;  // 700건마다 (안정성 유지)
+        } else if (totalRequests <= 70000) {
+            return 1000;  // 1,000건마다 (70k 최적화)
         } else if (totalRequests <= 100000) {
-            return 1500;  // 1,500건마다 (10만 트래픽 최적화)
+            return 1500;  // 1,500건마다 (100k 최적화)
         } else if (totalRequests <= 200000) {
             return 3000;  // 3,000건마다 (대용량 처리)
         } else {
