@@ -137,11 +137,14 @@ public class LoadTestService {
                 }
             }
 
-            // 타임아웃 5분 설정 (K6 테스트가 무한 대기하는 것 방지)
-            boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.MINUTES);
+            // K6 duration + 여유시간(2분) 동적 타임아웃 설정
+            int timeoutMinutes = (config.duration / 60) + 2; // duration을 분으로 변환 + 2분 여유
+            log.info("⏱️ K6 프로세스 타임아웃 설정: {}분 (duration {}초 + 2분 여유)", timeoutMinutes, config.duration);
+
+            boolean finished = process.waitFor(timeoutMinutes, java.util.concurrent.TimeUnit.MINUTES);
             if (!finished) {
                 process.destroyForcibly();
-                throw new RuntimeException("K6 테스트 타임아웃 (5분 초과)");
+                throw new RuntimeException("K6 테스트 타임아웃 (" + timeoutMinutes + "분 초과)");
             }
 
             int exitCode = process.exitValue();
@@ -320,7 +323,7 @@ public class LoadTestService {
                 duration = 120; // 대량: 120초
                 maxVUs = 10000;
             } else if (totalRequests <= 100000) {
-                duration = 300; // 10만: 300초
+                duration = 480; // 10만: 300초
                 maxVUs = 15000;
             } else if (totalRequests <= 500000) {
                 duration = 1200; // 50만: 1200초 (20분) - 백프레셔 5,000건마다
