@@ -320,7 +320,7 @@ public class LoadTestService {
                 duration = 60; // 대량: 60초
                 maxVUs = 10000;
             } else if (totalRequests <= 100000) {
-                duration = 300; // 10만: 300초 (5분) - 백프레셔 5,000건마다
+                duration = 100; // 10만: 100초 (백프레셔 1,500건마다 200ms 반영)
                 maxVUs = 15000;
             } else if (totalRequests <= 500000) {
                 duration = 1200; // 50만: 1200초 (20분) - 백프레셔 5,000건마다
