@@ -311,16 +311,16 @@ public class LoadTestService {
             int maxVUs;
 
             if (totalRequests <= 5000) {
-                duration = 10; // 소량: 10초 (백프레셔 고려)
+                duration = 20; // 소량: 20초 (백프레셔 고려)
                 maxVUs = 5000;
             } else if (totalRequests <= 15000) {
-                duration = 30; // 중량: 30초 (백프레셔 200ms 고려)
+                duration = 60; // 중량: 60초 (백프레셔 200ms 고려)
                 maxVUs = 8000;
             } else if (totalRequests <= 50000) {
-                duration = 60; // 대량: 60초
+                duration = 120; // 대량: 120초
                 maxVUs = 10000;
             } else if (totalRequests <= 100000) {
-                duration = 100; // 10만: 100초 (백프레셔 1,500건마다 200ms 반영)
+                duration = 300; // 10만: 300초
                 maxVUs = 15000;
             } else if (totalRequests <= 500000) {
                 duration = 1200; // 50만: 1200초 (20분) - 백프레셔 5,000건마다
