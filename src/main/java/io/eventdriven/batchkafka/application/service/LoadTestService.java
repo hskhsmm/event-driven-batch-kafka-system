@@ -86,7 +86,7 @@ public class LoadTestService {
      */
     protected void executeK6TestAsync(String jobId, LoadTestRequest request, String testType) {
         try {
-            log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}, TotalRequests: {}, Partitions: {}",
+            log.info("🚀 K6 부하 테스트 시작 - JobID: {}, Type: {}, CampaignID: {}, 정확히 {}개 요청, Partitions: {}",
                     jobId, testType, request.getCampaignId(), request.getTotalRequests(), request.getPartitions());
 
             // Kafka 테스트인 경우 파티션 정보 로깅
@@ -103,8 +103,8 @@ public class LoadTestService {
             // 총 요청 수 기반으로 rate와 duration 계산
             K6Config config = calculateK6Config(request.getTotalRequests(), testType);
 
-            log.info("📊 K6 설정 - Rate: {}/s, Duration: {}s, MaxVUs: {}",
-                    config.rate, config.duration, config.maxVUs);
+            log.info("📊 K6 설정 - 정확히 {}개 iterations, 동시 VU: {}, 최대 Duration: {}s",
+                    request.getTotalRequests(), config.maxVUs, config.duration);
 
             // K6 스크립트 경로 (Docker 컨테이너 /app 기준)
             String scriptPath = testType.equals("kafka")
@@ -340,14 +340,17 @@ public class LoadTestService {
                 maxVUs = 30000;
             }
 
-            int rate = totalRequests / duration; // 초당 요청 수
+            // shared-iterations executor는 rate를 사용하지 않음 (레거시 호환성 유지)
+            int rate = 0;
 
             return new K6Config(rate, duration, maxVUs);
         } else {
             // Sync: 응답이 느림 (~4.5s) → 긴 시간에 걸쳐 요청
             int duration = 30; // 30초
-            int rate = totalRequests / duration; // 초당 요청 수
-            int maxVUs = Math.max(rate * 10, 5000); // rate의 10배 또는 최소 5000
+            // shared-iterations executor는 rate를 사용하지 않음
+            int rate = 0;
+            // totalRequests에 비례하여 VU 설정
+            int maxVUs = Math.min(totalRequests, 10000); // 최대 10000 VU
 
             return new K6Config(rate, duration, maxVUs);
         }
