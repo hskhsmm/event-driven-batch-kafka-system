@@ -13,7 +13,7 @@ const MAX_VUS = parseInt(__ENV.MAX_VUS) || 5000;     // 최대 가상 사용자 
 const TOTAL_REQUESTS = parseInt(__ENV.TOTAL_REQUESTS) || 30000; // 총 요청 수
 const PARTITIONS = parseInt(__ENV.PARTITIONS) || 3;  // Kafka 파티션 수
 
-console.log(`🚀 Kafka 부하 테스트 설정: ${TOTAL_REQUESTS}개 요청, ${RATE}/s, ${DURATION}s, ${PARTITIONS} 파티션`);
+console.log(` Kafka 부하 테스트 설정: ${TOTAL_REQUESTS}개 요청, ${RATE}/s, ${DURATION}s, ${PARTITIONS} 파티션`);
 
 // 테스트 설정
 export const options = {
@@ -44,7 +44,7 @@ export default function () {
     headers: {
       'Content-Type': 'application/json',
     },
-    timeout: '180s', // 타임아웃 3분 (10만 트래픽 Virtual Thread 병목 대응)
+    timeout: '600s', // 타임아웃 10분 (duration과 동일, 확실한 처리)
   };
 
   // 선착순 참여 요청
