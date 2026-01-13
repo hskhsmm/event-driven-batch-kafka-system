@@ -52,6 +52,7 @@ export default function () {
     headers: {
       'Content-Type': 'application/json',
     },
+    timeout: '1200s', // 타임아웃 20분 (여유있게 설정)
   };
 
   // 동기 방식 참여 요청 (Kafka 없이 바로 DB 처리)
