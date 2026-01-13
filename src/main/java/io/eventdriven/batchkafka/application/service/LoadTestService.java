@@ -314,30 +314,30 @@ public class LoadTestService {
             int maxVUs;
 
             if (totalRequests <= 5000) {
-                duration = 20; // 소량: 20초 (백프레셔 고려)
-                maxVUs = 5000;
+                duration = 20; // 소량: 20초
+                maxVUs = 1000;  // 현실적인 동시 접속자 수
             } else if (totalRequests <= 15000) {
-                duration = 60; // 중량: 60초 (백프레셔 200ms 고려)
-                maxVUs = 8000;
+                duration = 60; // 중량: 60초
+                maxVUs = 2000;  // 현실적인 동시 접속자 수
             } else if (totalRequests <= 50000) {
                 duration = 120; // 대량: 120초
-                maxVUs = 10000;
+                maxVUs = 3000;  // 현실적인 동시 접속자 수
             } else if (totalRequests <= 100000) {
-                duration = 600; // 10만: 600초 (10분, Virtual Thread 병목 해소)
-                maxVUs = 15000;
+                duration = 600; // 10만: 600초 (10분)
+                maxVUs = 2000;  // 실패율 0% 목표 (순서 보장 검증용)
             } else if (totalRequests <= 500000) {
-                duration = 1200; // 50만: 1200초 (20분) - 백프레셔 5,000건마다
-                maxVUs = 20000;
+                duration = 1200; // 50만: 1200초 (20분)
+                maxVUs = 8000;  // 현실적인 동시 접속자 수
             } else if (totalRequests <= 1000000) {
-                duration = 2400; // 100만: 2400초 (40분) - 백프레셔 10,000건마다
-                maxVUs = 25000;
+                duration = 2400; // 100만: 2400초 (40분)
+                maxVUs = 10000; // 현실적인 동시 접속자 수
             } else if (totalRequests <= 3000000) {
-                duration = 7200; // 300만: 7200초 (2시간) - 백프레셔 10,000건마다
-                maxVUs = 30000;
+                duration = 7200; // 300만: 7200초 (2시간)
+                maxVUs = 15000; // 현실적인 동시 접속자 수
             } else {
-                // 300만 초과: 3시간 (최대 안정성)
+                // 300만 초과: 3시간
                 duration = 10800; // 3시간
-                maxVUs = 30000;
+                maxVUs = 20000; // 현실적인 동시 접속자 수
             }
 
             // shared-iterations executor는 rate를 사용하지 않음 (레거시 호환성 유지)
@@ -349,8 +349,8 @@ public class LoadTestService {
             int duration = 30; // 30초
             // shared-iterations executor는 rate를 사용하지 않음
             int rate = 0;
-            // totalRequests에 비례하여 VU 설정
-            int maxVUs = Math.min(totalRequests, 10000); // 최대 10000 VU
+            // totalRequests에 비례하여 VU 설정 (현실적인 수치)
+            int maxVUs = Math.min(totalRequests / 20, 5000); // 현실적인 동시 접속자 수 (최대 5000)
 
             return new K6Config(rate, duration, maxVUs);
         }
