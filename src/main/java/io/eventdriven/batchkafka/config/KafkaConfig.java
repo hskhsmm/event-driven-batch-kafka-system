@@ -108,7 +108,7 @@ public class KafkaConfig {
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         // 성능 최적화를 위해 한 번에 여러 레코드를 가져오도록 설정
-        configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100); // 한 번에 100개씩 처리 (타임아웃 방지)
+        configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 200); // 한 번에 200개씩 처리 (10만 트래픽 최적화)
         configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // 수동 커밋 (처리 완료 후 커밋)
         configProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 600000); // 10분 (타임아웃 방지)
         configProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 45000); // 45초 (세션 타임아웃)

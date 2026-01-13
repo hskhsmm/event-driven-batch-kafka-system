@@ -44,6 +44,7 @@ export default function () {
     headers: {
       'Content-Type': 'application/json',
     },
+    timeout: '120s', // 타임아웃 2분 (10만 트래픽 처리 여유)
   };
 
   // 선착순 참여 요청

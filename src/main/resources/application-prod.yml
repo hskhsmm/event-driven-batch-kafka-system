@@ -11,6 +11,14 @@ management:
       enabled: false   #  Actuator Kafka Health 완전 제거
 
 spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 20     # 10만 트래픽 처리 최적화 (기본값 10 → 20)
+      minimum-idle: 10          # 최소 유휴 커넥션
+      connection-timeout: 20000 # 커넥션 획득 타임아웃 20초
+      idle-timeout: 300000      # 유휴 커넥션 유지 시간 5분
+      max-lifetime: 1800000     # 커넥션 최대 수명 30분
+
   jpa:
     hibernate:
       ddl-auto: validate  # 프로덕션에서는 validate 또는 none 권장
