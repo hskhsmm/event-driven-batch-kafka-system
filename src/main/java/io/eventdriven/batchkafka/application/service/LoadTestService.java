@@ -323,7 +323,7 @@ public class LoadTestService {
                 duration = 120; // 대량: 120초
                 maxVUs = 10000;
             } else if (totalRequests <= 100000) {
-                duration = 480; // 10만: 480초 (8분, Consumer 폴링 타임아웃 방지)
+                duration = 600; // 10만: 600초 (10분, Virtual Thread 병목 해소)
                 maxVUs = 15000;
             } else if (totalRequests <= 500000) {
                 duration = 1200; // 50만: 1200초 (20분) - 백프레셔 5,000건마다
