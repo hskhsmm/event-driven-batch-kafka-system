@@ -1,6 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
+import { SharedArray } from 'k6/data';
 
 // 커스텀 메트릭
 const successCount = new Counter('participation_success');
@@ -13,28 +14,35 @@ const MAX_VUS = parseInt(__ENV.MAX_VUS) || 5000;     // 최대 가상 사용자 
 const TOTAL_REQUESTS = parseInt(__ENV.TOTAL_REQUESTS) || 30000; // 총 요청 수
 const PARTITIONS = parseInt(__ENV.PARTITIONS) || 3;  // Kafka 파티션 수
 
-console.log(` Kafka 부하 테스트 설정: ${TOTAL_REQUESTS}개 요청, ${RATE}/s, ${DURATION}s, ${PARTITIONS} 파티션`);
+console.log(`🚀 Kafka 부하 테스트 설정: 정확히 ${TOTAL_REQUESTS}개 요청, 목표 ${RATE}/s, ${DURATION}s, ${PARTITIONS} 파티션`);
 
-// 테스트 설정
+// 사전 생성된 userId 배열 (정확히 TOTAL_REQUESTS개)
+const userIds = new SharedArray('userIds', function () {
+  const arr = [];
+  for (let i = 1; i <= TOTAL_REQUESTS; i++) {
+    arr.push(i);
+  }
+  return arr;
+});
+
+// 테스트 설정 - shared-iterations로 정확한 요청 수 보장
 export const options = {
   scenarios: {
-    spike_test: {
-      executor: 'constant-arrival-rate',
-      rate: RATE,              // 초당 요청 수 (환경변수)
-      timeUnit: '1s',
-      duration: `${DURATION}s`, // 지속 시간 (환경변수)
-      preAllocatedVUs: Math.floor(MAX_VUS * 0.6), // maxVUs의 60%를 미리 할당
-      maxVUs: MAX_VUS,         // 최대 VU (환경변수)
+    exact_requests: {
+      executor: 'shared-iterations',
+      vus: MAX_VUS,              // 동시 실행 VU 수
+      iterations: TOTAL_REQUESTS, // 정확히 이 수만큼만 실행
+      maxDuration: `${DURATION * 2}s`, // 최대 허용 시간 (duration의 2배 여유)
     },
   },
-  // Threshold 제거: 성능 측정이 목적이므로 pass/fail 기준 불필요
 };
 
 const BASE_URL = 'http://localhost:8080';
 const CAMPAIGN_ID = __ENV.CAMPAIGN_ID || 1; // 환경변수로 캠페인 ID 전달 가능
 
 export default function () {
-  const userId = __VU; // Virtual User ID를 userId로 사용 (1~100)
+  // 현재 iteration 번호를 userId로 사용 (1부터 TOTAL_REQUESTS까지 유니크)
+  const userId = userIds[__ITER];
 
   const payload = JSON.stringify({
     userId: userId,
@@ -74,9 +82,9 @@ export default function () {
     failCount.add(1);
   }
 
-  // 응답 로그 (샘플링)
-  if (__VU % 10 === 0) {
-    console.log(`[VU ${__VU}] Status: ${response.status}, Body: ${response.body}`);
+  // 응답 로그 (샘플링 - 100번째마다)
+  if (__ITER % 100 === 0) {
+    console.log(`[Iteration ${__ITER}] UserID: ${userId}, Status: ${response.status}`);
   }
 }
 
