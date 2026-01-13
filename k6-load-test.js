@@ -52,7 +52,7 @@ export default function () {
     headers: {
       'Content-Type': 'application/json',
     },
-    timeout: '600s', // 타임아웃 10분 (duration과 동일, 확실한 처리)
+    timeout: '1200s', // 타임아웃 20분 (여유있게 설정)
   };
 
   // 선착순 참여 요청
