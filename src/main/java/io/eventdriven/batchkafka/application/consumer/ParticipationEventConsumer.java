@@ -40,7 +40,7 @@ public class ParticipationEventConsumer {
     private final ProcessingLogService processingLogService;
 
     private static final String DLQ_TOPIC = "campaign-participation-topic.dlq";
-    private static final int LOG_INTERVAL = 1000; // 1000건마다 로그
+    private static final int LOG_INTERVAL = 10000; // 10000건마다 로그 (10만 트래픽 최적화)
 
     // 처리 건수 카운터 (메모리 기반, 재시작 시 초기화)
     private long processedCount = 0;

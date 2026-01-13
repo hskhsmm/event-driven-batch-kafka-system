@@ -11,7 +11,8 @@ services:
     memswap_limit: 6g
     environment:
       # JVM 메모리 제한 (t3.large 8GB 최적화 - 10만 트래픽 처리)
-      JAVA_TOOL_OPTIONS: -Xms1g -Xmx4g -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=256m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
+      # Heap 6GB로 증가 (1g → 2g, 4g → 6g) - 5만 건 이후 메모리 부족 방지
+      JAVA_TOOL_OPTIONS: -Xms2g -Xmx6g -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=256m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -Duser.timezone=Asia/Seoul -Dfile.encoding=UTF-8
     env_file:
       - /opt/batch-kafka/.env.prod
     restart: unless-stopped
