@@ -17,8 +17,6 @@ public enum ErrorCode {
     // 캠페인 관련
     CAMPAIGN_NOT_FOUND(HttpStatus.NOT_FOUND, "CAMPAIGN_001", "존재하지 않는 캠페인입니다."),
     CAMPAIGN_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "CAMPAIGN_002", "이미 종료된 캠페인입니다."),
-    STOCK_EXHAUSTED(HttpStatus.CONFLICT, "CAMPAIGN_003", "선착순 수량이 모두 소진되었습니다."),
-    INVALID_CAMPAIGN_STATUS(HttpStatus.BAD_REQUEST, "CAMPAIGN_004", "유효하지 않은 캠페인 상태입니다."),
 
     // 참여 관련
     DUPLICATE_PARTICIPATION(HttpStatus.CONFLICT, "PARTICIPATION_001", "이미 참여한 캠페인입니다."),
@@ -37,12 +35,10 @@ public enum ErrorCode {
 
     // Kafka 관련
     KAFKA_PUBLISH_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "KAFKA_001", "메시지 발행에 실패했습니다."),
-    KAFKA_CONSUME_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "KAFKA_002", "메시지 소비에 실패했습니다."),
     KAFKA_SERIALIZATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "KAFKA_003", "메시지 직렬화에 실패했습니다."),
     KAFKA_DESERIALIZATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "KAFKA_004", "메시지 역직렬화에 실패했습니다."),
 
     // 데이터베이스 관련
-    DATABASE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "DB_001", "데이터베이스 오류가 발생했습니다."),
     DATABASE_CONNECTION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "DB_002", "데이터베이스 연결에 실패했습니다."),
 
     // 일반 서버 오류
