@@ -293,12 +293,15 @@ public class StatsController {
                 return ResponseEntity.ok(ApiResponse.success("데이터 없음", Map.of()));
             }
 
-            // 2. Kafka offset 순서로 정렬
+            // 2. Kafka timestamp 순서로 정렬 (전역 도착 순서)
+            // 파티션 번호+오프셋이 아닌 타임스탬프로 정렬해야 진정한 전역 순서
             List<ParticipationHistory> arrivalOrder = allRecords.stream()
                     .filter(r -> r.getProcessingSequence() != null
                               && r.getKafkaPartition() != null
-                              && r.getKafkaOffset() != null)
-                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaPartition)
+                              && r.getKafkaOffset() != null
+                              && r.getKafkaTimestamp() != null)
+                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaTimestamp)
+                            .thenComparing(ParticipationHistory::getKafkaPartition)
                             .thenComparing(ParticipationHistory::getKafkaOffset))
                     .collect(Collectors.toList());
 
@@ -366,44 +369,35 @@ public class StatsController {
     }
 
     /**
-     * 순서 분석 API - Kafka offset 순서 vs 실제 처리 순서 비교
+     * 순서 분석 API - Kafka 타임스탬프 순서 vs 실제 처리 순서 비교
      * GET /api/admin/stats/order-analysis/{campaignId}
      *
      * === 측정 목적 ===
-     * 파티션 수 증가에 따른 "Kafka offset 순서 vs 처리 순서" 일치도 측정
+     * 파티션 수 증가에 따른 "전역 도착 순서 vs 처리 순서" 일치도 측정
      * → 처리량 증가 vs 순서 보장 트레이드오프 분석
      *
-     * === Kafka offset 순서 정의 ===
-     * Kafka는 파티션 내에서 offset 순서를 보장:
-     * - 1차: kafkaPartition (파티션 번호)
-     * - 2차: kafkaOffset (파티션 내 순서 번호, 0부터 시작)
-     *
-     * 파티션 1개: offset 0, 1, 2, 3, ... (완벽한 순서)
-     * 파티션 3개:
-     *   - P0: 0, 1, 2, ... (파티션 내 순서)
-     *   - P1: 0, 1, 2, ... (파티션 내 순서)
-     *   - P2: 0, 1, 2, ... (파티션 내 순서)
-     *   - 파티션 간 순서는 Consumer 스레드 경쟁으로 결정됨
+     * === 전역 도착 순서 정의 ===
+     * Kafka 타임스탬프(Producer CreateTime 또는 LogAppendTime)를 기준으로 정렬
+     * - 파티션+오프셋은 파티션 내 순서일 뿐, 전역 순서가 아님
+     * - 타임스탬프가 실제로 메시지가 브로커에 기록된 시간을 나타냄
      *
      * === 처리 순서 ===
      * processingSequence: Consumer가 메시지 처리를 시작한 전역 순서 번호 (AtomicLong)
      * - 모든 파티션 통틀어서 1, 2, 3, 4, ... 순차 증가
      *
      * === 측정 방법 ===
-     * 1. 모든 레코드를 offset 순서로 정렬 (partition → offset)
+     * 1. 모든 레코드를 Kafka 타임스탬프 순서로 정렬 (전역 도착 순서)
      * 2. 인접한 레코드 쌍 비교:
-     *    - offset 순서상 앞선 메시지가 처리 순서상 뒤면 → 순서 불일치
+     *    - 타임스탬프 순서상 앞선 메시지가 처리 순서상 뒤면 → 순서 불일치
      * 3. 순서 정확도 = (일치 쌍 / 전체 쌍) × 100%
      *
      * === 결과 해석 ===
-     * 파티션 1개: 100% (offset 순서 = 처리 순서)
-     * 파티션 3개: ~33% (각 파티션은 순서 유지하지만, 파티션 간 뒤섞임)
-     * 파티션 12개: ~8% (파티션 간 심하게 뒤섞임)
+     * 순서 정확도가 높을수록 "먼저 도착한 요청이 먼저 처리됨"
+     * 파티션 수가 늘어나면 병렬 처리로 인해 순서 정확도가 낮아질 수 있음
      *
      * === 비즈니스 의미 ===
-     * - 파티션 1개: "선착순"이 완벽하게 보장됨
-     * - 파티션 3개: 파티션별로 "선착순"이지만, 전체적으로는 섞임
-     * - 파티션 12개: "선착순" 의미 없음, 재고만 정확
+     * - 높은 정확도: "선착순"이 잘 보장됨
+     * - 낮은 정확도: 병렬 처리로 인해 처리 순서가 도착 순서와 다름
      */
     @GetMapping("/order-analysis/{campaignId}")
     public ResponseEntity<ApiResponse<?>> analyzeProcessingOrder(@PathVariable Long campaignId) {
@@ -453,15 +447,17 @@ public class StatsController {
                 partitionMismatches.put(partition, partitionMismatch);
             }
 
-            // 3-2. 전역 순서 불일치 계산 (Kafka offset 순서 vs 처리 순서)
+            // 3-2. 전역 순서 불일치 계산 (Kafka 타임스탬프 순서 vs 처리 순서)
 
-            // Kafka 순서 정의: partition → offset
-            // (Kafka는 파티션 내 offset 순서를 보장하므로, 이것이 진짜 도착 순서)
+            // 전역 도착 순서 = Kafka 타임스탬프 기준
+            // (파티션+오프셋은 파티션 내 순서일 뿐, 전역 순서가 아님)
             List<ParticipationHistory> arrivalOrder = allRecords.stream()
                     .filter(r -> r.getProcessingSequence() != null
                               && r.getKafkaPartition() != null
-                              && r.getKafkaOffset() != null)
-                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaPartition)
+                              && r.getKafkaOffset() != null
+                              && r.getKafkaTimestamp() != null)
+                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaTimestamp)
+                            .thenComparing(ParticipationHistory::getKafkaPartition)
                             .thenComparing(ParticipationHistory::getKafkaOffset))
                     .collect(Collectors.toList());
 
