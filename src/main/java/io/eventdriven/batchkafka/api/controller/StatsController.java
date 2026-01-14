@@ -313,10 +313,11 @@ public class StatsController {
         log.info("### END DEBUG ###");
 
             // 3. 순서 위반 케이스 추출
-            // 동일 타임스탬프(1ms 이내)는 순서 판정 불가 → 비교에서 제외
-            final long TOLERANCE_MS = 1;
+            // - 같은 파티션끼리는 offset 순서가 진짜 순서 → 전역 비교에서 제외
+            // - 정확히 같은 타임스탬프는 순서 판정 불가 → 비교에서 제외
             List<Map<String, Object>> violations = new java.util.ArrayList<>();
             int sameTimestampSkipped = 0;
+            int samePartitionSkipped = 0;
 
             // 전체 구간 스캔: 위반은 최대 limit개까지만 수집
             for (int i = 0; i < (arrivalOrder.size() - 1); i++) {
@@ -325,13 +326,19 @@ public class StatsController {
                 ParticipationHistory current = arrivalOrder.get(i);
                 ParticipationHistory next = arrivalOrder.get(i + 1);
 
-                // 동일 타임스탬프(tolerance 이내)는 순서 판정 불가 → 건너뜀
-                long timeDiff = Math.abs(next.getKafkaTimestamp() - current.getKafkaTimestamp());
-                if (timeDiff <= TOLERANCE_MS) {
+                // 같은 파티션끼리는 전역 비교 제외 (파티션 내에서는 offset 순서가 진짜)
+                if (current.getKafkaPartition().equals(next.getKafkaPartition())) {
+                    samePartitionSkipped++;
+                    continue;
+                }
+
+                // 정확히 같은 타임스탬프는 순서 판정 불가 → 건너뜀
+                if (current.getKafkaTimestamp().equals(next.getKafkaTimestamp())) {
                     sameTimestampSkipped++;
                     continue;
                 }
 
+                long timeDiff = Math.abs(next.getKafkaTimestamp() - current.getKafkaTimestamp());
                 if (current.getProcessingSequence() > next.getProcessingSequence()) {
                     Map<String, Object> violation = new HashMap<>();
                     violation.put("index", i);
@@ -368,6 +375,7 @@ public class StatsController {
             data.put("campaignId", campaignId);
             data.put("totalRecords", arrivalOrder.size());
             data.put("violationsFound", violations.size());
+            data.put("samePartitionSkipped", samePartitionSkipped);
             data.put("sameTimestampSkipped", sameTimestampSkipped);
             data.put("violations", violations);
             data.put("queryTimeMs", endTime - startTime);
@@ -475,19 +483,25 @@ public class StatsController {
                     .collect(Collectors.toList());
 
             // 메인 지표: 전체 도착 순서 기준
-            // 동일 타임스탬프(1ms 이내)는 순서 판정 불가 → 비교에서 제외
-            final long TOLERANCE_MS = 1;
+            // - 같은 파티션끼리는 offset 순서가 진짜 순서 → 전역 비교에서 제외
+            // - 정확히 같은 타임스탬프는 순서 판정 불가 → 비교에서 제외
             int totalOrderMismatches = 0;
             int comparableCount = 0;  // 실제 비교 가능한 쌍 수
             int sameTimestampSkipped = 0;  // 동일 타임스탬프로 건너뛴 수
+            int samePartitionSkipped = 0;  // 같은 파티션으로 건너뛴 수
 
             for (int i = 0; i < arrivalOrder.size() - 1; i++) {
                 ParticipationHistory current = arrivalOrder.get(i);
                 ParticipationHistory next = arrivalOrder.get(i + 1);
 
-                // 동일 타임스탬프(tolerance 이내)는 순서 판정 불가 → 건너뜀
-                long timeDiff = Math.abs(next.getKafkaTimestamp() - current.getKafkaTimestamp());
-                if (timeDiff <= TOLERANCE_MS) {
+                // 같은 파티션끼리는 전역 비교 제외 (파티션 내에서는 offset 순서가 진짜)
+                if (current.getKafkaPartition().equals(next.getKafkaPartition())) {
+                    samePartitionSkipped++;
+                    continue;
+                }
+
+                // 정확히 같은 타임스탬프는 순서 판정 불가 → 건너뜀
+                if (current.getKafkaTimestamp().equals(next.getKafkaTimestamp())) {
                     sameTimestampSkipped++;
                     continue;
                 }
@@ -572,6 +586,7 @@ public class StatsController {
             summary.put("orderAccuracy", String.format("%.2f%%", orderAccuracy));
             summary.put("partitionCount", partitionGroups.size());
             summary.put("totalComparisons", totalComparisons);
+            summary.put("samePartitionSkipped", samePartitionSkipped);
             summary.put("sameTimestampSkipped", sameTimestampSkipped);
             data.put("summary", summary);
 
