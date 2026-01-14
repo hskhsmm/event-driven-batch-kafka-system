@@ -312,71 +312,75 @@ public class StatsController {
         }
         log.info("### END DEBUG ###");
 
-            // 3. 순서 위반 케이스 추출
-            // - 같은 파티션끼리는 offset 순서가 진짜 순서 → 전역 비교에서 제외
-            // - 정확히 같은 타임스탬프는 순서 판정 불가 → 비교에서 제외
+            // 3. 전체 역전 쌍 계산 (Inversion Count)
+            long[] processingSequences = arrivalOrder.stream()
+                    .mapToLong(ParticipationHistory::getProcessingSequence)
+                    .toArray();
+
+            long inversionCount = countInversions(processingSequences);
+            long n = processingSequences.length;
+            long totalPairs = n * (n - 1) / 2;
+
+            // 4. 샘플 역전 케이스 추출 (슬라이딩 윈도우 방식)
+            // - 각 위치에서 앞뒤 일정 범위 내에서 역전 케이스 찾기
             List<Map<String, Object>> violations = new java.util.ArrayList<>();
-            int sameTimestampSkipped = 0;
-            int samePartitionSkipped = 0;
+            int windowSize = Math.min(100, arrivalOrder.size() / 10 + 1);  // 윈도우 크기
 
-            // 전체 구간 스캔: 위반은 최대 limit개까지만 수집
-            for (int i = 0; i < (arrivalOrder.size() - 1); i++) {
-                if (violations.size() >= limit) break;
-
+            for (int i = 0; i < arrivalOrder.size() && violations.size() < limit; i++) {
                 ParticipationHistory current = arrivalOrder.get(i);
-                ParticipationHistory next = arrivalOrder.get(i + 1);
 
-                // 같은 파티션끼리는 전역 비교 제외 (파티션 내에서는 offset 순서가 진짜)
-                if (current.getKafkaPartition().equals(next.getKafkaPartition())) {
-                    samePartitionSkipped++;
-                    continue;
-                }
+                // 현재 위치에서 윈도우 범위 내에서 역전 케이스 찾기
+                int searchEnd = Math.min(i + windowSize, arrivalOrder.size());
+                for (int j = i + 1; j < searchEnd && violations.size() < limit; j++) {
+                    ParticipationHistory next = arrivalOrder.get(j);
 
-                // 정확히 같은 타임스탬프는 순서 판정 불가 → 건너뜀
-                if (current.getKafkaTimestamp().equals(next.getKafkaTimestamp())) {
-                    sameTimestampSkipped++;
-                    continue;
-                }
-
-                long timeDiff = Math.abs(next.getKafkaTimestamp() - current.getKafkaTimestamp());
-                if (current.getProcessingSequence() > next.getProcessingSequence()) {
-                    Map<String, Object> violation = new HashMap<>();
-                    violation.put("index", i);
-                    violation.put("timeDiffMs", timeDiff);
-                    violation.put("current", Map.of(
-                            "userId", current.getUserId(),
-                            "timestamp", current.getKafkaTimestamp(),
-                            "partition", current.getKafkaPartition(),
-                            "offset", current.getKafkaOffset(),
-                            "processingSeq", current.getProcessingSequence(),
-                            "status", current.getStatus().toString()
-                    ));
-                    violation.put("next", Map.of(
-                            "userId", next.getUserId(),
-                            "timestamp", next.getKafkaTimestamp(),
-                            "partition", next.getKafkaPartition(),
-                            "offset", next.getKafkaOffset(),
-                            "processingSeq", next.getProcessingSequence(),
-                            "status", next.getStatus().toString()
-                    ));
-                    violation.put("explanation", String.format(
-                            "ts %d → %d (diff=%dms): P%d:%d(seq=%d)가 P%d:%d(seq=%d)보다 늦게 처리됨",
-                            current.getKafkaTimestamp(), next.getKafkaTimestamp(), timeDiff,
-                            current.getKafkaPartition(), current.getKafkaOffset(), current.getProcessingSequence(),
-                            next.getKafkaPartition(), next.getKafkaOffset(), next.getProcessingSequence()
-                    ));
-                    violations.add(violation);
+                    // 역전 발생: 먼저 도착(i)했는데 나중에 처리됨(seq가 더 큼)
+                    if (current.getProcessingSequence() > next.getProcessingSequence()) {
+                        long timeDiff = Math.abs(next.getKafkaTimestamp() - current.getKafkaTimestamp());
+                        Map<String, Object> violation = new HashMap<>();
+                        violation.put("index", i);
+                        violation.put("timeDiffMs", timeDiff);
+                        violation.put("current", Map.of(
+                                "userId", current.getUserId(),
+                                "timestamp", current.getKafkaTimestamp(),
+                                "partition", current.getKafkaPartition(),
+                                "offset", current.getKafkaOffset(),
+                                "processingSeq", current.getProcessingSequence(),
+                                "status", current.getStatus().toString()
+                        ));
+                        violation.put("next", Map.of(
+                                "userId", next.getUserId(),
+                                "timestamp", next.getKafkaTimestamp(),
+                                "partition", next.getKafkaPartition(),
+                                "offset", next.getKafkaOffset(),
+                                "processingSeq", next.getProcessingSequence(),
+                                "status", next.getStatus().toString()
+                        ));
+                        violation.put("explanation", String.format(
+                                "ts %d → %d (diff=%dms): P%d:%d(seq=%d)가 P%d:%d(seq=%d)보다 늦게 처리됨",
+                                current.getKafkaTimestamp(), next.getKafkaTimestamp(), timeDiff,
+                                current.getKafkaPartition(), current.getKafkaOffset(), current.getProcessingSequence(),
+                                next.getKafkaPartition(), next.getKafkaOffset(), next.getProcessingSequence()
+                        ));
+                        violations.add(violation);
+                        break;  // 현재 위치에서 하나 찾으면 다음으로
+                    }
                 }
             }
 
             long endTime = System.currentTimeMillis();
 
+            double orderAccuracy = totalPairs > 0
+                    ? 100.0 * (totalPairs - inversionCount) / totalPairs
+                    : 100.0;
+
             Map<String, Object> data = new HashMap<>();
             data.put("campaignId", campaignId);
             data.put("totalRecords", arrivalOrder.size());
-            data.put("violationsFound", violations.size());
-            data.put("samePartitionSkipped", samePartitionSkipped);
-            data.put("sameTimestampSkipped", sameTimestampSkipped);
+            data.put("inversionCount", inversionCount);
+            data.put("totalPairs", totalPairs);
+            data.put("orderAccuracy", String.format("%.2f%%", orderAccuracy));
+            data.put("sampleViolations", violations.size());
             data.put("violations", violations);
             data.put("queryTimeMs", endTime - startTime);
 
@@ -482,41 +486,21 @@ public class StatsController {
                             .thenComparing(ParticipationHistory::getKafkaOffset))
                     .collect(Collectors.toList());
 
-            // 메인 지표: 전체 도착 순서 기준
-            // - 같은 파티션끼리는 offset 순서가 진짜 순서 → 전역 비교에서 제외
-            // - 정확히 같은 타임스탬프는 순서 판정 불가 → 비교에서 제외
-            int totalOrderMismatches = 0;
-            int comparableCount = 0;  // 실제 비교 가능한 쌍 수
-            int sameTimestampSkipped = 0;  // 동일 타임스탬프로 건너뛴 수
-            int samePartitionSkipped = 0;  // 같은 파티션으로 건너뛴 수
+            // 메인 지표: 전역 순서 역전 쌍 계산 (Inversion Count)
+            // - 타임스탬프 순으로 정렬된 processingSequence에서 역전 쌍 수 계산
+            // - 역전 = 먼저 도착한 메시지가 나중에 처리된 경우
+            // - O(n log n) Merge Sort 기반 알고리즘 사용
 
-            for (int i = 0; i < arrivalOrder.size() - 1; i++) {
-                ParticipationHistory current = arrivalOrder.get(i);
-                ParticipationHistory next = arrivalOrder.get(i + 1);
+            long[] processingSequences = arrivalOrder.stream()
+                    .mapToLong(ParticipationHistory::getProcessingSequence)
+                    .toArray();
 
-                // 같은 파티션끼리는 전역 비교 제외 (파티션 내에서는 offset 순서가 진짜)
-                if (current.getKafkaPartition().equals(next.getKafkaPartition())) {
-                    samePartitionSkipped++;
-                    continue;
-                }
+            long inversionCount = countInversions(processingSequences);
+            long n = processingSequences.length;
+            long totalPairs = n * (n - 1) / 2;  // 전체 비교 가능한 쌍 수
 
-                // 정확히 같은 타임스탬프는 순서 판정 불가 → 건너뜀
-                if (current.getKafkaTimestamp().equals(next.getKafkaTimestamp())) {
-                    sameTimestampSkipped++;
-                    continue;
-                }
-
-                comparableCount++;
-                // 도착 순서상 앞선 메시지가 나중에 처리되었으면 순서 위반
-                if (current.getProcessingSequence() > next.getProcessingSequence()) {
-                    totalOrderMismatches++;
-                }
-            }
-
-            int totalComparisons = comparableCount;
-
-            double orderAccuracy = totalComparisons > 0
-                    ? 100.0 * (totalComparisons - totalOrderMismatches) / totalComparisons
+            double orderAccuracy = totalPairs > 0
+                    ? 100.0 * (totalPairs - inversionCount) / totalPairs
                     : 100.0;
 
             // 4. 파티션별 메시지 분포
@@ -582,12 +566,10 @@ public class StatsController {
             // 메인 지표
             Map<String, Object> summary = new HashMap<>();
             summary.put("totalRecords", allRecords.size());
-            summary.put("orderMismatches", totalOrderMismatches);
+            summary.put("inversionCount", inversionCount);  // 역전 쌍 수
+            summary.put("totalPairs", totalPairs);  // 전체 비교 쌍 수
             summary.put("orderAccuracy", String.format("%.2f%%", orderAccuracy));
             summary.put("partitionCount", partitionGroups.size());
-            summary.put("totalComparisons", totalComparisons);
-            summary.put("samePartitionSkipped", samePartitionSkipped);
-            summary.put("sameTimestampSkipped", sameTimestampSkipped);
             data.put("summary", summary);
 
             data.put("partitionDistribution", partitionDistribution);
@@ -596,14 +578,14 @@ public class StatsController {
 
             // 해석 가이드
             Map<String, Object> interpretation = new HashMap<>();
-            interpretation.put("orderAccuracy", "Kafka 타임스탬프 순서 기준 (전역 도착 순서)");
+            interpretation.put("orderAccuracy", "전역 순서 일치율 (Inversion Count 기반)");
+            interpretation.put("algorithm", "Merge Sort 기반 O(n log n) 역전 쌍 계산");
             interpretation.put("guide", orderAccuracy >= 99.0 ? "완벽한 순서 보장" :
                              orderAccuracy >= 95.0 ? "높은 순서 보장" :
                              orderAccuracy >= 85.0 ? "중간 순서 보장" :
-                             "낮은 순서 보장 (병렬 처리 영향)");
-            interpretation.put("note", sameTimestampSkipped > 0
-                            ? "동일 타임스탬프 " + sameTimestampSkipped + "쌍 제외 (순서 판정 불가)"
-                            : "모든 쌍 비교 완료");
+                             orderAccuracy >= 50.0 ? "낮은 순서 보장 (병렬 처리 영향)" :
+                             "순서 보장 없음 (완전 병렬 처리)");
+            interpretation.put("note", String.format("전체 %,d쌍 중 %,d쌍 역전", totalPairs, inversionCount));
             data.put("interpretation", interpretation);
 
             log.info("📊 순서 분석 완료 - campaignId: {}, totalRecords: {}, partitions: {}, orderAccuracy: {:.2f}%, queryTime: {}ms",
@@ -616,5 +598,56 @@ public class StatsController {
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.fail("순서 분석 중 오류가 발생했습니다."));
         }
+    }
+
+    // ==================== Inversion Count 알고리즘 (Merge Sort 기반) ====================
+
+    /**
+     * 전역 순서 역전 쌍 계산 (O(n log n))
+     * - 타임스탬프 순으로 정렬된 processingSequence 배열에서 역전 쌍 수를 계산
+     * - 역전 = 먼저 도착한 메시지가 나중에 처리된 경우
+     */
+    private long countInversions(long[] arr) {
+        long[] temp = arr.clone();
+        return mergeSortAndCount(temp, 0, temp.length - 1);
+    }
+
+    private long mergeSortAndCount(long[] arr, int left, int right) {
+        long count = 0;
+        if (left < right) {
+            int mid = left + (right - left) / 2;
+            count += mergeSortAndCount(arr, left, mid);
+            count += mergeSortAndCount(arr, mid + 1, right);
+            count += mergeAndCount(arr, left, mid, right);
+        }
+        return count;
+    }
+
+    private long mergeAndCount(long[] arr, int left, int mid, int right) {
+        int n1 = mid - left + 1;
+        int n2 = right - mid;
+
+        long[] leftArr = new long[n1];
+        long[] rightArr = new long[n2];
+
+        System.arraycopy(arr, left, leftArr, 0, n1);
+        System.arraycopy(arr, mid + 1, rightArr, 0, n2);
+
+        int i = 0, j = 0, k = left;
+        long count = 0;
+
+        while (i < n1 && j < n2) {
+            if (leftArr[i] <= rightArr[j]) {
+                arr[k++] = leftArr[i++];
+            } else {
+                arr[k++] = rightArr[j++];
+                count += (n1 - i);  // 역전 쌍 카운트
+            }
+        }
+
+        while (i < n1) arr[k++] = leftArr[i++];
+        while (j < n2) arr[k++] = rightArr[j++];
+
+        return count;
     }
 }
