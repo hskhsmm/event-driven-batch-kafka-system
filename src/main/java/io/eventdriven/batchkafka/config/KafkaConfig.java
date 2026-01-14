@@ -31,6 +31,32 @@ public class KafkaConfig {
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
 
+    // Producer 설정값 (프로필별로 변경 가능)
+    @Value("${kafka.producer.buffer-memory:134217728}")  // 기본 128MB
+    private long producerBufferMemory;
+
+    @Value("${kafka.producer.batch-size:65536}")  // 기본 64KB
+    private int producerBatchSize;
+
+    @Value("${kafka.producer.linger-ms:20}")  // 기본 20ms
+    private int producerLingerMs;
+
+    @Value("${kafka.producer.compression-type:none}")  // 기본 none
+    private String producerCompressionType;
+
+    @Value("${kafka.producer.max-block-ms:60000}")  // 기본 60초
+    private long producerMaxBlockMs;
+
+    // Consumer 설정값 (프로필별로 변경 가능)
+    @Value("${kafka.consumer.max-poll-records:500}")  // 기본 500건
+    private int consumerMaxPollRecords;
+
+    @Value("${kafka.consumer.max-poll-interval-ms:600000}")  // 기본 10분
+    private int consumerMaxPollIntervalMs;
+
+    @Value("${kafka.consumer.session-timeout-ms:45000}")  // 기본 45초
+    private int consumerSessionTimeoutMs;
+
     public static final String TOPIC_NAME = "campaign-participation-topic";
 
     /**
@@ -65,12 +91,16 @@ public class KafkaConfig {
         configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // 멱등성 보장 (중복 방지)
         configProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE); // 실패 시 무한 재시도
 
-        // 성능 최적화 설정 (t3.large 8GB, 10만 트래픽 처리 최적화)
-        configProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 128 * 1024 * 1024); // 128MB (버퍼 증가로 대기 감소)
-        configProps.put(ProducerConfig.BATCH_SIZE_CONFIG, 64 * 1024);           // 64KB (배치 크기 증가)
-        configProps.put(ProducerConfig.LINGER_MS_CONFIG, 20);                   // 20ms (배치 효율 극대화, 지연 최소)
-        configProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "none");        // 압축 해제 (CPU 부담 제거)
-        configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);             // 60초 대기 (타임아웃 방지)
+        // 성능 최적화 설정 (프로필별로 조정 가능)
+        configProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, producerBufferMemory);
+        configProps.put(ProducerConfig.BATCH_SIZE_CONFIG, producerBatchSize);
+        configProps.put(ProducerConfig.LINGER_MS_CONFIG, producerLingerMs);
+        configProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, producerCompressionType);
+        configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, producerMaxBlockMs);
+
+        log.info("🔧 Producer 설정 - Buffer: {}MB, Batch: {}KB, Linger: {}ms, Compression: {}, MaxBlock: {}ms",
+                producerBufferMemory / 1024 / 1024, producerBatchSize / 1024, producerLingerMs,
+                producerCompressionType, producerMaxBlockMs);
 
         return new DefaultKafkaProducerFactory<>(configProps);
     }
@@ -107,11 +137,14 @@ public class KafkaConfig {
         configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
-        // 성능 최적화를 위해 한 번에 여러 레코드를 가져오도록 설정
-        configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 500); // 한 번에 500개씩 처리 (배치 크기 증가)
+        // 성능 최적화를 위해 한 번에 여러 레코드를 가져오도록 설정 (프로필별로 조정 가능)
+        configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, consumerMaxPollRecords);
         configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // 수동 커밋 (처리 완료 후 커밋)
-        configProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 600000); // 10분 (타임아웃 방지)
-        configProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 45000); // 45초 (세션 타임아웃)
+        configProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, consumerMaxPollIntervalMs);
+        configProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, consumerSessionTimeoutMs);
+
+        log.info("🔧 Consumer 설정 - MaxPollRecords: {}, MaxPollInterval: {}ms, SessionTimeout: {}ms",
+                consumerMaxPollRecords, consumerMaxPollIntervalMs, consumerSessionTimeoutMs);
 
         return new DefaultKafkaConsumerFactory<>(configProps);
     }
