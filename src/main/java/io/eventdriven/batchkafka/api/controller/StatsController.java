@@ -275,8 +275,135 @@ public class StatsController {
     }
 
     /**
-     * 순서 분석 API - Kafka offset 순서 vs 실제 DB 저장 순서 비교
+     * 순서 위반 케이스만 추출 (검증용)
+     * GET /api/admin/stats/order-violations/{campaignId}?limit=100
+     */
+    @GetMapping("/order-violations/{campaignId}")
+    public ResponseEntity<ApiResponse<?>> getOrderViolations(
+            @PathVariable Long campaignId,
+            @RequestParam(defaultValue = "100") int limit) {
+        try {
+            long startTime = System.currentTimeMillis();
+
+            // 1. 모든 레코드 조회
+            List<ParticipationHistory> allRecords = participationHistoryRepository
+                    .findByCampaignIdOrderByKafkaTimestampAsc(campaignId);
+
+            if (allRecords.isEmpty()) {
+                return ResponseEntity.ok(ApiResponse.success("데이터 없음", Map.of()));
+            }
+
+            // 2. Kafka offset 순서로 정렬
+            List<ParticipationHistory> arrivalOrder = allRecords.stream()
+                    .filter(r -> r.getProcessingSequence() != null
+                              && r.getKafkaPartition() != null
+                              && r.getKafkaOffset() != null)
+                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaPartition)
+                            .thenComparing(ParticipationHistory::getKafkaOffset))
+                    .collect(Collectors.toList());
+
+        log.info("### DEBUG: Top 5 arrivalOrder in getOrderViolations ###");
+        for(int i=0; i < Math.min(5, arrivalOrder.size()); i++) {
+            ParticipationHistory r = arrivalOrder.get(i);
+            log.info("Item " + i + ": P=" + r.getKafkaPartition() + ", O=" + r.getKafkaOffset() + ", Seq=" + r.getProcessingSequence());
+        }
+        log.info("### END DEBUG ###");
+
+            // 3. 순서 위반 케이스 추출
+            List<Map<String, Object>> violations = new java.util.ArrayList<>();
+
+            // 전체 구간 스캔: 위반은 최대 limit개까지만 수집
+            for (int i = 0; i < (arrivalOrder.size() - 1); i++) {
+                if (violations.size() >= limit) break;
+
+                ParticipationHistory current = arrivalOrder.get(i);
+                ParticipationHistory next = arrivalOrder.get(i + 1);
+
+                if (current.getProcessingSequence() > next.getProcessingSequence()) {
+                    Map<String, Object> violation = new HashMap<>();
+                    violation.put("index", i);
+                    violation.put("current", Map.of(
+                            "userId", current.getUserId(),
+                            "timestamp", current.getKafkaTimestamp(),
+                            "partition", current.getKafkaPartition(),
+                            "offset", current.getKafkaOffset(),
+                            "processingSeq", current.getProcessingSequence(),
+                            "status", current.getStatus().toString()
+                    ));
+                    violation.put("next", Map.of(
+                            "userId", next.getUserId(),
+                            "timestamp", next.getKafkaTimestamp(),
+                            "partition", next.getKafkaPartition(),
+                            "offset", next.getKafkaOffset(),
+                            "processingSeq", next.getProcessingSequence(),
+                            "status", next.getStatus().toString()
+                    ));
+                    violation.put("explanation", String.format(
+                            "offset P%d:%d(seq=%d)가 P%d:%d(seq=%d)보다 늦게 처리됨",
+                            current.getKafkaPartition(), current.getKafkaOffset(), current.getProcessingSequence(),
+                            next.getKafkaPartition(), next.getKafkaOffset(), next.getProcessingSequence()
+                    ));
+                    violations.add(violation);
+                }
+            }
+
+            long endTime = System.currentTimeMillis();
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("campaignId", campaignId);
+            data.put("totalRecords", arrivalOrder.size());
+            data.put("violationsFound", violations.size());
+            data.put("violations", violations);
+            data.put("queryTimeMs", endTime - startTime);
+
+            return ResponseEntity.ok(ApiResponse.success(data));
+
+        } catch (Exception e) {
+            log.error("🚨 순서 위반 조회 실패 - campaignId: {}", campaignId, e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.fail("순서 위반 조회 중 오류가 발생했습니다."));
+        }
+    }
+
+    /**
+     * 순서 분석 API - Kafka offset 순서 vs 실제 처리 순서 비교
      * GET /api/admin/stats/order-analysis/{campaignId}
+     *
+     * === 측정 목적 ===
+     * 파티션 수 증가에 따른 "Kafka offset 순서 vs 처리 순서" 일치도 측정
+     * → 처리량 증가 vs 순서 보장 트레이드오프 분석
+     *
+     * === Kafka offset 순서 정의 ===
+     * Kafka는 파티션 내에서 offset 순서를 보장:
+     * - 1차: kafkaPartition (파티션 번호)
+     * - 2차: kafkaOffset (파티션 내 순서 번호, 0부터 시작)
+     *
+     * 파티션 1개: offset 0, 1, 2, 3, ... (완벽한 순서)
+     * 파티션 3개:
+     *   - P0: 0, 1, 2, ... (파티션 내 순서)
+     *   - P1: 0, 1, 2, ... (파티션 내 순서)
+     *   - P2: 0, 1, 2, ... (파티션 내 순서)
+     *   - 파티션 간 순서는 Consumer 스레드 경쟁으로 결정됨
+     *
+     * === 처리 순서 ===
+     * processingSequence: Consumer가 메시지 처리를 시작한 전역 순서 번호 (AtomicLong)
+     * - 모든 파티션 통틀어서 1, 2, 3, 4, ... 순차 증가
+     *
+     * === 측정 방법 ===
+     * 1. 모든 레코드를 offset 순서로 정렬 (partition → offset)
+     * 2. 인접한 레코드 쌍 비교:
+     *    - offset 순서상 앞선 메시지가 처리 순서상 뒤면 → 순서 불일치
+     * 3. 순서 정확도 = (일치 쌍 / 전체 쌍) × 100%
+     *
+     * === 결과 해석 ===
+     * 파티션 1개: 100% (offset 순서 = 처리 순서)
+     * 파티션 3개: ~33% (각 파티션은 순서 유지하지만, 파티션 간 뒤섞임)
+     * 파티션 12개: ~8% (파티션 간 심하게 뒤섞임)
+     *
+     * === 비즈니스 의미 ===
+     * - 파티션 1개: "선착순"이 완벽하게 보장됨
+     * - 파티션 3개: 파티션별로 "선착순"이지만, 전체적으로는 섞임
+     * - 파티션 12개: "선착순" 의미 없음, 재고만 정확
      */
     @GetMapping("/order-analysis/{campaignId}")
     public ResponseEntity<ApiResponse<?>> analyzeProcessingOrder(@PathVariable Long campaignId) {
@@ -326,31 +453,29 @@ public class StatsController {
                 partitionMismatches.put(partition, partitionMismatch);
             }
 
-            // 3-2. 글로벌 순서 불일치 계산 (파티션별 kafka_offset 순서 vs 처리 순서 번호)
+            // 3-2. 전역 순서 불일치 계산 (Kafka offset 순서 vs 처리 순서)
+
+            // Kafka 순서 정의: partition → offset
+            // (Kafka는 파티션 내 offset 순서를 보장하므로, 이것이 진짜 도착 순서)
+            List<ParticipationHistory> arrivalOrder = allRecords.stream()
+                    .filter(r -> r.getProcessingSequence() != null
+                              && r.getKafkaPartition() != null
+                              && r.getKafkaOffset() != null)
+                    .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaPartition)
+                            .thenComparing(ParticipationHistory::getKafkaOffset))
+                    .collect(Collectors.toList());
+
+            // 메인 지표: 전체 도착 순서 기준
             int totalOrderMismatches = 0;
-            int totalComparisons = 0;
+            int totalComparisons = arrivalOrder.size() - 1;
 
-            // 파티션별로 순서 확인 (파티션 내에서 offset 순서 = 처리 순서여야 함)
-            for (Map.Entry<Integer, List<ParticipationHistory>> entry : partitionGroups.entrySet()) {
-                List<ParticipationHistory> partitionRecords = entry.getValue();
+            for (int i = 0; i < arrivalOrder.size() - 1; i++) {
+                ParticipationHistory current = arrivalOrder.get(i);
+                ParticipationHistory next = arrivalOrder.get(i + 1);
 
-                // processingSequence가 있는 레코드만 (최신 데이터)
-                List<ParticipationHistory> recordsWithSeq = partitionRecords.stream()
-                        .filter(r -> r.getProcessingSequence() != null)
-                        .sorted(java.util.Comparator.comparing(ParticipationHistory::getKafkaOffset))
-                        .collect(Collectors.toList());
-
-                for (int i = 0; i < recordsWithSeq.size() - 1; i++) {
-                    ParticipationHistory current = recordsWithSeq.get(i);
-                    ParticipationHistory next = recordsWithSeq.get(i + 1);
-
-                    totalComparisons++;
-
-                    // kafka_offset 순서로 정렬했는데, processingSequence가 역전되면 순서 불일치!
-                    // (파티션 내에서 offset이 작으면 processingSequence도 작아야 함)
-                    if (current.getProcessingSequence() > next.getProcessingSequence()) {
-                        totalOrderMismatches++;
-                    }
+                // 도착 순서상 앞선 메시지가 나중에 처리되었으면 순서 위반
+                if (current.getProcessingSequence() > next.getProcessingSequence()) {
+                    totalOrderMismatches++;
                 }
             }
 
@@ -417,18 +542,34 @@ public class StatsController {
             Map<String, Object> data = new HashMap<>();
             data.put("campaignId", campaignId);
             data.put("queryTimeMs", duration);
+
+            // 메인 지표
             data.put("summary", Map.of(
                     "totalRecords", allRecords.size(),
                     "orderMismatches", totalOrderMismatches,
                     "orderAccuracy", String.format("%.2f%%", orderAccuracy),
-                    "partitionCount", partitionGroups.size()
+                    "partitionCount", partitionGroups.size(),
+                    "totalComparisons", totalComparisons
             ));
+
             data.put("partitionDistribution", partitionDistribution);
             data.put("partitionMismatches", partitionMismatches);
             data.put("samples", samples);
 
-            log.info("📊 순서 분석 완료 - campaignId: {}, totalRecords: {}, partitions: {}, orderMismatches: {}, orderAccuracy: {:.2f}%, queryTime: {}ms",
-                    campaignId, allRecords.size(), partitionGroups.size(), totalOrderMismatches, orderAccuracy, duration);
+            // 해석 가이드
+            data.put("interpretation", Map.of(
+                    "orderAccuracy", "Kafka offset 순서 기준 (partition → offset)",
+                    "guide", orderAccuracy >= 99.0 ? "완벽한 순서 보장 (파티션 내)" :
+                             orderAccuracy >= 95.0 ? "높은 순서 보장" :
+                             orderAccuracy >= 85.0 ? "중간 순서 보장" :
+                             "낮은 순서 보장 (파티션 많음)",
+                    "note", partitionGroups.size() == 1
+                            ? "파티션 1개: offset 순서 = 처리 순서 (100% 기대)"
+                            : "파티션 " + partitionGroups.size() + "개: 파티션 내에서만 순서 보장, 파티션 간은 경쟁"
+            ));
+
+            log.info("📊 순서 분석 완료 - campaignId: {}, totalRecords: {}, partitions: {}, orderAccuracy: {:.2f}%, queryTime: {}ms",
+                    campaignId, allRecords.size(), partitionGroups.size(), orderAccuracy, duration);
 
             return ResponseEntity.ok(ApiResponse.success(data));
 
