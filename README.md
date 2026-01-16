@@ -196,11 +196,14 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 ### 파티션별 Web 모니터링 결과
 
 #### 파티션 1개
+
+
+
 - CPU 부하가 서서히 상승
 - 처리 전반에 걸쳐 안정적인 패턴
 - 부하 분산이 완만함
 
-<img width="896" height="901" alt="KakaoTalk_20260114_160240952" src="https://github.com/user-attachments/assets/b7364a43-6dba-4875-8ebe-9dabbfad2f38" />
+<img width="796" height="801" alt="KakaoTalk_20260114_160240952" src="https://github.com/user-attachments/assets/b7364a43-6dba-4875-8ebe-9dabbfad2f38" />
 
 
 ---
@@ -210,7 +213,7 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 - CPU 부하가 비교적 이른 시점에 상승
 - 초반 부하 집중 현상 관측
 
-<img width="772" height="899" alt="KakaoTalk_20260115_180433523" src="https://github.com/user-attachments/assets/1757a66d-4b4a-4aec-a7be-fbdcdd495ba6" />
+<img width="796" height="801" alt="KakaoTalk_20260115_180433523" src="https://github.com/user-attachments/assets/1757a66d-4b4a-4aec-a7be-fbdcdd495ba6" />
 
 
 ---
@@ -220,7 +223,7 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 - CPU 사용률이 빠르게 피크에 도달
 - 전체 처리 완료 시점은 큰 차이 없음
 
-<img width="829" height="898" alt="KakaoTalk_20260115_193853573" src="https://github.com/user-attachments/assets/4c478281-7b02-4eb0-958b-a98b543bd1c7" />
+<img width="796" height="801" alt="KakaoTalk_20260115_193853573" src="https://github.com/user-attachments/assets/4c478281-7b02-4eb0-958b-a98b543bd1c7" />
 
 
 ---
