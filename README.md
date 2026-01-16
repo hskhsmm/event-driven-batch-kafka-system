@@ -458,7 +458,8 @@ ON DUPLICATE KEY UPDATE
 | **S3** | CodeDeploy 배포용 zip 번들 저장 |
 
 
-[사진: AWS 아키텍처 다이어그램]
+<img width="1011" height="483" alt="image" src="https://github.com/user-attachments/assets/597f4e50-9b71-43aa-ae80-1ad69640ef79" />
+
 
 ---
 
