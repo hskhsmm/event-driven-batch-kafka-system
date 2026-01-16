@@ -416,10 +416,12 @@ ON DUPLICATE KEY UPDATE
 | **Network** | ALB | 트래픽 분산, 헬스체크 |
 | **CI/CD** | GitHub Actions | 빌드 및 배포 자동화 |
 | **CI/CD** | CodeDeploy | EC2 무중단 배포 |
+| **Storage** | S3 | CodeDeploy 배포 번들(zip) 저장 |
 | **Container** | ECR | Docker 이미지 저장소 |
 | **Container** | Docker | Kafka 컨테이너 실행 |
 | **Security** | Parameter Store | 환경변수 및 시크릿 관리 |
 | **Access** | SSM Session Manager | SSH 없이 EC2 접속 |
+
 
 ### 인프라 구성
 
@@ -429,6 +431,8 @@ ON DUPLICATE KEY UPDATE
 | **EC2 (Kafka)** | Docker로 Kafka 브로커 운영 |
 | **RDS** | MySQL 8.0, 재고 및 참여 이력 저장 |
 | **ALB** | HTTPS 처리, 헬스체크, 트래픽 분산 |
+| **S3** | CodeDeploy 배포용 zip 번들 저장 |
+
 
 [사진: AWS 아키텍처 다이어그램]
 
