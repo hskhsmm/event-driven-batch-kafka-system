@@ -435,13 +435,6 @@ ON DUPLICATE KEY UPDATE
 ---
 
 
-
-## License
-
-This project is licensed under the MIT License.
-
----
-
 ## Author
 
 **HSKHSMM**
