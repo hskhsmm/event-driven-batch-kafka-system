@@ -8,33 +8,25 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 import org.springframework.dao.DataAccessException;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 import java.util.Map;
 
 /**
  * 참여 이력 집계 Tasklet
  * - participation_history → campaign_stats 집계
  * - 일자별, 캠페인별 성공/실패 건수 통계
- * - 개별 캠페인별로 독립적인 트랜잭션 처리 (REQUIRES_NEW)
+ * - GROUP BY를 활용한 단일 쿼리로 N+1 문제 해결
  */
 @Slf4j
 class AggregateParticipationTasklet implements Tasklet {
 
-    private final NamedParameterJdbcTemplate jdbcTemplate;
     private final CampaignAggregationService campaignAggregationService;
 
-    AggregateParticipationTasklet(
-            NamedParameterJdbcTemplate jdbcTemplate,
-            CampaignAggregationService campaignAggregationService
-    ) {
-        this.jdbcTemplate = jdbcTemplate;
+    AggregateParticipationTasklet(CampaignAggregationService campaignAggregationService) {
         this.campaignAggregationService = campaignAggregationService;
     }
 
@@ -79,59 +71,17 @@ class AggregateParticipationTasklet implements Tasklet {
                         "JobParameters required: either (start,end) as ISO-8601 datetime or (date) as YYYY-MM-DD");
             }
 
-            // 2. 집계 대상 캠페인 ID 목록 조회 (대용량 처리 최적화)
-            String campaignIdsSql = """
-                    SELECT DISTINCT campaign_id
-                    FROM participation_history
-                    WHERE created_at >= :start AND created_at < :end
-                    ORDER BY campaign_id
-                    """;
+            // 2. 모든 캠페인 일괄 집계 (단일 쿼리 - N+1 문제 해결)
+            int updated = campaignAggregationService.aggregateAllCampaigns(start, end);
 
-            MapSqlParameterSource campaignIdsParams = new MapSqlParameterSource()
-                    .addValue("start", start)
-                    .addValue("end", end);
-
-            List<Long> campaignIds = jdbcTemplate.queryForList(
-                    campaignIdsSql,
-                    campaignIdsParams,
-                    Long.class
-            );
-
-            if (campaignIds.isEmpty()) {
+            if (updated == 0) {
                 log.warn("⚠️ 집계 대상 데이터 없음 - 기간: {} ~ {}", start, end);
                 contribution.setExitStatus(new ExitStatus("UPDATED_0")
                         .addExitDescription("집계 대상 데이터 없음"));
                 return RepeatStatus.FINISHED;
             }
 
-            log.info("📊 집계 대상 캠페인: {} 개 - {}", campaignIds.size(), campaignIds);
-
-            // 3. 캠페인별 순차 집계 (독립 트랜잭션으로 처리)
-            int totalUpdated = 0;
-            int successCount = 0;
-            int failureCount = 0;
-
-            for (Long campaignId : campaignIds) {
-                try {
-                    // REQUIRES_NEW 트랜잭션으로 개별 캠페인 집계
-                    int updated = campaignAggregationService.aggregateByCampaign(campaignId, start, end);
-                    totalUpdated += updated;
-                    successCount++;
-                } catch (Exception e) {
-                    // 개별 캠페인 실패는 독립 트랜잭션이므로 다른 캠페인에 영향 없음
-                    failureCount++;
-                    log.error("  ✗ 캠페인 {} 집계 실패 (독립 트랜잭션 롤백)", campaignId, e);
-                }
-            }
-
-            log.info("✅ 전체 집계 완료 - 성공: {}/{}, 실패: {}, 총 업데이트: {} 행",
-                    successCount, campaignIds.size(), failureCount, totalUpdated);
-
-            if (failureCount > 0) {
-                log.warn("⚠️ 일부 캠페인 집계 실패 - 실패 수: {}", failureCount);
-            }
-
-            int updated = totalUpdated;
+            log.info("✅ 전체 집계 완료 - {} 개 캠페인 업데이트 (단일 쿼리)", updated);
 
             // 3. 성공 상태 기록
             contribution.setExitStatus(new ExitStatus("UPDATED_" + updated));

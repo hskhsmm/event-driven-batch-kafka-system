@@ -10,18 +10,14 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
 public class AggregateParticipationJobConfig {
 
     @Bean
-    public Tasklet aggregateByWindowTasklet(
-            NamedParameterJdbcTemplate jdbcTemplate,
-            CampaignAggregationService campaignAggregationService
-    ) {
-        return new AggregateParticipationTasklet(jdbcTemplate, campaignAggregationService);
+    public Tasklet aggregateByWindowTasklet(CampaignAggregationService campaignAggregationService) {
+        return new AggregateParticipationTasklet(campaignAggregationService);
     }
 
     @Bean
