@@ -160,7 +160,9 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 - 메시지 소비 속도가 비교적 일정
 - 처리 흐름이 예측 가능
 
-<img width="904" height="325" alt="KakaoTalk_20260114_160407393" src="https://github.com/user-attachments/assets/961e9229-bb2d-425e-96e0-a4881a0f12ea" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/961e9229-bb2d-425e-96e0-a4881a0f12ea" width="700" />
+</p>
 
 
 ---
@@ -170,7 +172,9 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 - 초반 Kafka TPS 상승
 - 메시지 소비 시작 속도 증가
 
-<img width="893" height="328" alt="KakaoTalk_20260115_180450271" src="https://github.com/user-attachments/assets/8cedcacf-cfe4-414d-aab6-1fda25f67cf4" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/8cedcacf-cfe4-414d-aab6-1fda25f67cf4" width="700" />
+</p>
 
 
 ---
@@ -180,7 +184,9 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 - 메시지 소비가 초반에 집중됨
 - Kafka 파이프라인 기준 처리 속도는 가장 빠름
 
-<img width="817" height="330" alt="KakaoTalk_20260115_193915664" src="https://github.com/user-attachments/assets/4e13d2b5-e65c-4ee5-a57f-02ce4d84ea64" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4e13d2b5-e65c-4ee5-a57f-02ce4d84ea64" width="700" />
+</p>
 
 
 ---
@@ -197,6 +203,7 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 
 #### 파티션 1개
 
+![p1 monitor2](https://github.com/user-attachments/assets/217f5ac7-6a81-4294-8b9f-ca1ebb7797b8)
 
 
 - CPU 부하가 서서히 상승
@@ -209,6 +216,10 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 ---
 
 #### 파티션 3개
+
+![p3 monitor](https://github.com/user-attachments/assets/2754fd82-474f-472c-b5e1-a4499d468a98)
+
+
 - 메시지 소비가 더 빠르게 시작
 - CPU 부하가 비교적 이른 시점에 상승
 - 초반 부하 집중 현상 관측
@@ -219,6 +230,10 @@ Kafka가 얼마나 빠르게 메시지를 전달하는지를 확인할 수 있�
 ---
 
 #### 파티션 5개
+
+![p5 monitor4](https://github.com/user-attachments/assets/906edf8d-52c1-4fc5-bd7e-9dfaf6f2b318)
+
+
 - 메시지 소비가 초반에 가장 집중
 - CPU 사용률이 빠르게 피크에 도달
 - 전체 처리 완료 시점은 큰 차이 없음
