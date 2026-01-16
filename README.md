@@ -1,6 +1,8 @@
 # Event-Driven First-Come-First-Served Campaign System
 
 > **10만 건 동시 트래픽 환경에서 공정한 선착순 처리를 보장하는 이벤트 시스템**
+>
+> *This project focuses on architectural decision-making through measurable experiments rather than feature completeness.*
 
 [![Java](https://img.shields.io/badge/Java-25-orange.svg)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
@@ -14,6 +16,14 @@
 이 프로젝트는 수만 명이 동시에 참여하는 선착순 이벤트 환경에서 단순한 처리 성공이 아닌 **공정한 순서 보장과 데이터 정합성**을 목표로 설계되었습니다.
 
 특히 Kafka 파티션 수에 따른 **처리량 증가와 순서 보장 붕괴의 트레이드오프**를 실험과 수치로 검증하고, 이를 기반으로 아키텍처 결정을 내리는 것을 핵심 목표로 삼았습니다.
+
+### 왜 이 프로젝트인가
+
+기존 선착순 시스템 구현 사례들은 대부분 단일 서버 동기 처리이거나, Kafka 도입 여부 자체에만 초점을 맞추는 경우가 많습니다.
+
+그러나 실제 운영 환경에서는 "Kafka를 쓰는 것이 과연 어떤 지점에서 의미가 있고, 어디까지가 Kafka의 책임이며, 어디부터는 DB와 애플리케이션의 설계 문제인가?"에 대한 답이 명확하지 않은 경우가 많습니다.
+
+본 프로젝트는 기능 구현보다 **이 질문에 실험과 수치로 답하는 것**을 목표로 설계되었습니다.
 
 ### 핵심 질문
 
@@ -62,6 +72,32 @@
 | 5 | 100,000 | 288.18 | 0.0020 | 0 |
 
 [사진: 파티션별 성능 비교 테이블]
+
+### TPS 측정 위치 구분
+
+Kafka 시스템에서 **TPS는 측정 위치에 따라 의미가 다릅니다.**
+
+| 구분 | 측정 위치 | 의미 |
+|------|----------|------|
+| **Kafka TPS** | Producer publish → Consumer poll 성공 | 이벤트 파이프라인 처리 속도 |
+| **DB TPS** | Consumer processing → DB transaction commit | 실제 비즈니스 처리 속도 |
+| **시스템 TPS** | API request → DB commit 완료 (end-to-end) | 사용자 관점 처리 속도 |
+
+위 테이블의 `processing_tps`는 **DB transaction commit 기준**입니다. Consumer가 메시지를 poll하고 비즈니스 로직 처리 후 DB에 commit 완료한 시점을 측정했습니다.
+
+```
+API request → Producer publish → Broker append → Consumer poll → DB commit (여기서 측정)
+```
+
+**왜 이 구분이 중요한가?**
+
+Kafka 시스템에서 병목은 보통 두 곳 중 하나입니다:
+1. Producer → Broker (드묾)
+2. **Consumer → DB (90%)**
+
+Kafka 자체는 빠르지만, DB write에서 병목이 발생하면 lag이 쌓이고 응답이 지연됩니다. 이 구분을 하지 않으면 "Kafka가 느리다"는 잘못된 결론에 도달할 수 있습니다.
+
+본 프로젝트에서는 DB transaction commit 시점을 기준으로 TPS를 산정했습니다. 이는 실제 비즈니스 처리량의 병목이 Consumer → DB 구간에 있기 때문이며, 파티션을 늘려도 DB TPS가 선형 증가하지 않는 것을 실험으로 확인했습니다.
 
 ### 가설과 다른 결과
 
@@ -182,8 +218,7 @@ WHERE id = :id AND current_stock > 0;
 - `affected rows = 1`: 재고 차감 성공 (SUCCESS)
 - `affected rows = 0`: 이미 소진됨 (FAIL)
 
-> "그럼 Kafka에서 순서가 깨져도 왜 문제 없죠?"
-> → **"DB에서 최종적으로 한 번 더 걸러주기 때문입니다."**
+Kafka에서 전역 순서가 다소 섞이더라도 DB 레벨에서 원자적으로 재고를 검증하기 때문에, 최종 결과의 정합성은 항상 보장됩니다.
 
 ---
 
