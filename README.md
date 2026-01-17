@@ -479,9 +479,70 @@ ON DUPLICATE KEY UPDATE
 
 <img width="1011" height="483" alt="image" src="https://github.com/user-attachments/assets/597f4e50-9b71-43aa-ae80-1ad69640ef79" />
 
-[설명 추가 예정]
 ---
 
+## 아키텍처 상세 설명
+
+본 아키텍처는 **대용량 트래픽 처리 및 배치 집계**를 안정적으로 수행하면서도, 불필요한 관리형 서비스를 배제하여 **비용을 최소화**하는 방향으로 설계되었습니다.
+
+### 배포 파이프라인 (CI/CD) — Blue-Green 전략
+
+대용량 트래픽 환경에서 배포 중 리소스 간섭을 방지하고 서비스 중단 시간을 0으로 유지하기 위해 **Blue-Green** 방식을 채택합니다.
+
+* **GitHub Actions (CI):** * Docker 이미지를 빌드하여 **ECR**에 Push합니다.
+* 배포 스크립트 및 설정 파일(`appspec.yml`)을 `deploy.zip`으로 압축하여 **S3**에 업로드합니다.
+
+
+* **CodeDeploy (Orchestration):** * 배포 시점에만 새로운 **Green EC2 인스턴스**를 생성하여 비용 낭비를 최소화합니다 (On-Demand Scaling).
+* 새 인스턴스의 **CodeDeploy Agent**에게 배포 명령을 내립니다.
+
+
+* **Green EC2 인스턴스 (실행 주체):**
+* **fetch revision:** S3에서 `deploy.zip`을 다운로드합니다.
+* **execute hooks:** `appspec.yml`에 정의된 훅에 따라 배포 전후 처리를 수행합니다.
+* **docker pull:** **ECR**로부터 최신 이미지를 직접 당겨와 컨테이너를 실행합니다.
+
+
+* **교체 및 회수:** ALB가 Green 인스턴스의 헬스체크를 완료하면 트래픽을 전환하고, 기존 Blue 인스턴스는 즉시 제거하여 비용을 절감합니다.
+
+---
+
+### 런타임 아키텍처 및 네트워크 구성
+
+비용 절감을 위해 NAT Gateway와 같은 고비용 컴포넌트를 의도적으로 배제하였습니다.
+
+* **Public Subnet (ALB, API EC2, Kafka EC2):** * **ALB:** 외부 트래픽의 유일한 진입점으로 트래픽 분산 및 헬스체크를 담당합니다.
+* **API EC2 (Spring Boot):** 8080/8081 포트에서 동작하며 API, Consumer, Batch 역할을 통합 수행합니다.
+* **Native Kafka EC2:** Docker 없이 EC2에 직접 설치하여 컨테이너 오버헤드를 제거하고 대용량 트래픽 처리 성능을 극대화했습니다. 고정 인프라로 운영되며 ALB와 연결되지 않습니다.
+
+
+* **Private Subnet (RDS):** * **MySQL 8.0:** 재고 및 이력을 저장하며, 오직 API EC2의 보안 그룹을 통해서만 접근을 허용하여 보안을 강화했습니다.
+* **비용 최적화:** 모든 EC2를 Public Subnet에 배치하여 **NAT Gateway 비용을 제거**하고, Outbound 트래픽은 Internet Gateway를 통해 직접 처리합니다.
+
+---
+
+### 보안 및 관리 전략 (SSM & Parameter Store)
+
+인프라의 복잡도를 낮추면서도 보안 표준을 준수합니다.
+
+* **SSM (Systems Manager) Session Manager:** * 22번 포트(SSH)를 완전히 차단하고 SSM을 통해 EC2에 접속하여 키 파일 관리 부담을 없애고 보안 사고를 예방합니다.
+* **Parameter Store:** * DB 계정 정보 및 Kafka 설정 등 모든 민감 정보를 중앙에서 관리하여 소스 코드 내 유출을 원천 차단합니다.
+* **보안 그룹 (Security Group):**
+* **API EC2:** ALB로부터의 8080/8081 트래픽만 허용합니다.
+* **Kafka EC2:** API EC2로부터의 9092 포트 내부 통신만 허용합니다.
+* **RDS:** API EC2로부터의 3306 포트 접근만 허용합니다.
+
+
+
+---
+
+### 설계 요약
+
+1. **비용 최소화:** NAT Gateway 미사용, 배포 시점에만 자원 이중화, MSK 대신 Native Kafka 직접 운영.
+2. **성능 최적화:** Native Kafka를 통한 고처리량 확보 및 Blue-Green을 통한 배포 중 성능 간섭 배제.
+3. **운영 안정성:** SSM을 통한 안전한 접근과 Parameter Store를 통한 보안 설정 관리.
+
+---
 
 ## Author
 
