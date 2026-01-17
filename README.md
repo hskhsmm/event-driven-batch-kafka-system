@@ -479,7 +479,7 @@ ON DUPLICATE KEY UPDATE
 
 <img width="1011" height="483" alt="image" src="https://github.com/user-attachments/assets/597f4e50-9b71-43aa-ae80-1ad69640ef79" />
 
-
+[설명 추가 예정]
 ---
 
 
