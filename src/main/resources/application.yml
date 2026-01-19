@@ -29,6 +29,12 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
 
+  # Redis 설정 (기본값 - 로컬 개발용)
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
 # 배치 작업 설정
 batch:
   aggregation:
