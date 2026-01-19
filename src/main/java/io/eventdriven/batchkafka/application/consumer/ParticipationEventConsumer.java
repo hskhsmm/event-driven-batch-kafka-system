@@ -5,6 +5,7 @@ import tools.jackson.databind.json.JsonMapper;
 import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundException;
 import io.eventdriven.batchkafka.application.event.ParticipationEvent;
 import io.eventdriven.batchkafka.application.service.ProcessingLogService;
+import io.eventdriven.batchkafka.application.service.RedisStockService;
 import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
 import io.eventdriven.batchkafka.domain.entity.ParticipationStatus;
@@ -38,6 +39,7 @@ public class ParticipationEventConsumer {
     private final ParticipationHistoryRepository participationHistoryRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ProcessingLogService processingLogService;
+    private final RedisStockService redisStockService;
 
     private static final String DLQ_TOPIC = "campaign-participation-topic.dlq";
     private static final int LOG_INTERVAL = 10000; // 10000건마다 로그 (10만 트래픽 최적화)
@@ -124,11 +126,11 @@ public class ParticipationEventConsumer {
      * 참여 처리 비즈니스 로직
      */
     private ParticipationStatus processParticipation(ParticipationEvent event) {
-        // 1. 원자적 재고 차감 (반환값: 0=재고 부족, 1=성공)
-        int updatedRows = campaignRepository.decreaseStockAtomic(event.getCampaignId());
+        // 1. Redis 원자적 재고 차감 (반환값: 0 이상=성공, -1=실패)
+        Long remainingStock = redisStockService.decreaseStock(event.getCampaignId());
 
         ParticipationStatus status;
-        if (updatedRows > 0) {
+        if (remainingStock >= 0) {
             status = ParticipationStatus.SUCCESS;
         } else {
             status = ParticipationStatus.FAIL;
