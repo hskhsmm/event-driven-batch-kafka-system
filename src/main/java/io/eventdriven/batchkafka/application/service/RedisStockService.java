@@ -32,7 +32,7 @@ public class RedisStockService {
      * @param campaignId 캠페인 ID
      * @param stock 초기 재고 수량
      */
-    public void initializeStock(Long campaignId, int stock) {
+    public void initializeStock(Long campaignId, Long stock) {
         String key = getStockKey(campaignId);
         redisTemplate.opsForValue().set(key, String.valueOf(stock));
         log.info("📦 Redis 재고 초기화 - Campaign: {}, Stock: {}", campaignId, stock);
