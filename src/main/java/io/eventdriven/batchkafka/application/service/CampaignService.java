@@ -17,11 +17,16 @@ import java.util.stream.Collectors;
 public class CampaignService {
 
     private final CampaignRepository campaignRepository;
+    private final RedisStockService redisStockService;
 
     @Transactional
     public CampaignResponse createCampaign(CampaignCreateRequest request) {
         Campaign campaign = new Campaign(request.getName(), request.getTotalStock());
         Campaign savedCampaign = campaignRepository.save(campaign);
+
+        // Redis에 재고 초기화
+        redisStockService.initializeStock(savedCampaign.getId(), request.getTotalStock());
+
         return new CampaignResponse(savedCampaign);
     }
 
