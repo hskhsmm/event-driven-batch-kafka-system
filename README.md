@@ -522,6 +522,80 @@ Kafka에서 전역 순서가 다소 섞이더라도 DB 레벨에서 원자적으
 
 ---
 
+## Dead Letter Queue (DLQ)
+
+> Consumer 처리 실패 시 메시지 유실을 방지하는 안전장치
+
+### 왜 DLQ가 필요한가?
+
+Kafka Consumer에서 메시지 처리 중 예외가 발생하면 두 가지 문제가 생깁니다.
+
+| 상황 | 문제점 |
+|------|--------|
+| **예외 무시** | 메시지 유실, 참여 이력 누락 |
+| **무한 재시도** | 동일 메시지가 계속 실패하며 전체 처리 차단 |
+
+DLQ는 **처리 불가능한 메시지를 별도 토픽으로 격리**하여 정상 메시지 처리를 계속하면서도 실패 메시지를 보존합니다.
+
+---
+
+### DLQ 처리 흐름
+
+```
+Consumer 메시지 처리
+    ├── 성공 → DB 저장 → offset commit
+    └── 실패 → DLQ 토픽 전송 → offset commit (재처리 방지)
+```
+
+### DLQ 메시지 구조
+
+```json
+{
+  "originalMessage": "원본 Kafka 메시지",
+  "errorReason": "CampaignNotFoundException",
+  "errorMessage": "캠페인을 찾을 수 없습니다: 999",
+  "errorType": "CampaignNotFoundException",
+  "timestamp": "2026-01-20T12:34:56"
+}
+```
+
+---
+
+### 구현 방식
+
+| 구분 | 처리 |
+|------|------|
+| **단일 메시지 오류** | JSON 파싱 실패, 캠페인 없음 등 → 개별 DLQ 전송 |
+| **배치 전체 오류** | DB 연결 실패 등 심각한 오류 → 배치 전체 DLQ 전송 |
+
+```java
+// ParticipationEventConsumer.java
+private static final String DLQ_TOPIC = "campaign-participation-topic.dlq";
+
+private void sendToDlq(String originalMessage, String errorReason, Exception exception) {
+    Map<String, Object> dlqMessage = new HashMap<>();
+    dlqMessage.put("originalMessage", originalMessage);
+    dlqMessage.put("errorReason", errorReason);
+    dlqMessage.put("errorMessage", exception.getMessage());
+    dlqMessage.put("timestamp", LocalDateTime.now().toString());
+
+    kafkaTemplate.send(DLQ_TOPIC, jsonMapper.writeValueAsString(dlqMessage));
+}
+```
+
+---
+
+### DLQ 도입 효과
+
+| 항목 | 효과 |
+|------|------|
+| **메시지 유실 방지** | 실패 메시지도 DLQ에 보존되어 추후 분석 가능 |
+| **장애 격리** | 잘못된 메시지가 전체 처리를 차단하지 않음 |
+| **디버깅 용이** | 원본 메시지 + 에러 정보가 함께 저장되어 원인 파악 가능 |
+| **운영 안정성** | 정상 메시지는 계속 처리되어 서비스 영향 최소화 |
+
+---
+
 ## 배치 처리
 
 > 실시간과 집계를 분리한 이유
