@@ -39,6 +39,7 @@ fetch_param SPRING_DATASOURCE_URL "/batch-kafka/prod/SPRING_DATASOURCE_URL"
 fetch_param SPRING_DATASOURCE_USERNAME "/batch-kafka/prod/SPRING_DATASOURCE_USERNAME"
 fetch_param SPRING_DATASOURCE_PASSWORD "/batch-kafka/prod/SPRING_DATASOURCE_PASSWORD"
 fetch_param SPRING_KAFKA_BOOTSTRAP_SERVERS "/batch-kafka/prod/SPRING_KAFKA_BOOTSTRAP_SERVERS"
+fetch_param SPRING_DATA_REDIS_HOST "/batch-kafka/prod/SPRING_DATA_REDIS_HOST"
 fetch_param ECR_IMAGE "/batch-kafka/prod/ECR_IMAGE"
 
 chmod 600 "${ENV_FILE}"
