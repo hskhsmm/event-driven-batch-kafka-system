@@ -155,7 +155,7 @@ Kafka 파티션 수 증가에 따라 다음과 같은 트레이드오프를 예�
 
 **부하 꺾이는 시점**
 
-<img width="800" height="310" alt="image" src="https://github.com/user-attachments/assets/0d8facc0-c582-4794-8ac3-2261c78a09e2" />
+<img width="900" height="310" alt="image" src="https://github.com/user-attachments/assets/0d8facc0-c582-4794-8ac3-2261c78a09e2" />
 
 <br>
 
@@ -177,7 +177,7 @@ Kafka 파티션 수 증가에 따라 다음과 같은 트레이드오프를 예�
 
 **부하 꺾이는 시점**
 
-<img width="800" height="326" alt="image" src="https://github.com/user-attachments/assets/a2c895db-5f58-4d84-ae65-d670b42057f2" />
+<img width="900" height="326" alt="image" src="https://github.com/user-attachments/assets/a2c895db-5f58-4d84-ae65-d670b42057f2" />
 
 <br>
 
@@ -199,7 +199,7 @@ Kafka 파티션 수 증가에 따라 다음과 같은 트레이드오프를 예�
 
 **부하 꺾이는 시점**
 
-<img width="800" height="329" alt="image" src="https://github.com/user-attachments/assets/22a6bb61-aab8-40a6-a7ea-726ebd6249f0" />
+<img width="900" height="329" alt="image" src="https://github.com/user-attachments/assets/22a6bb61-aab8-40a6-a7ea-726ebd6249f0" />
 
 <br>
 
