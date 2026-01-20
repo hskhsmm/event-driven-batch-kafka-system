@@ -1,7 +1,11 @@
 # 파티션 5개 실험용 설정
-# 사용법: SPRING_PROFILES_ACTIVE=local,p5 ./gradlew bootRun
+# 사용법: SPRING_PROFILES_ACTIVE=prod,p5
 
 spring:
+  kafka:
+    listener:
+      concurrency: 5  # Consumer 스레드 5개 (파티션 수와 동일)
+
   datasource:
     hikari:
       maximum-pool-size: 40     # 30 → 40 (Consumer 스레드 5개 + 여유)

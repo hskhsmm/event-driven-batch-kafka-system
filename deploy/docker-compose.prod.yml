@@ -11,7 +11,7 @@ services:
     memswap_limit: 6g
     environment:
       # Spring 프로필 (파티션 3개 실험)
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: prod,p3
 
       # JVM 메모리 제한 (t3.large 8GB 최적화 - 10만 트래픽 처리)
       # Heap 5GB (컨테이너 6GB 중 안전 마진 1GB 확보, Non-Heap 영역 보장)
