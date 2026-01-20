@@ -335,7 +335,9 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 1개
 
+![p1실시간](https://github.com/user-attachments/assets/512d5001-71a7-4651-9903-2926530a05c1)
 
+<br>
 <img width="673" height="870" alt="실시간 모니터링" src="https://github.com/user-attachments/assets/ddca4438-7e92-4589-b9e0-be60b4aa33fe" />
 
 
@@ -352,6 +354,9 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 3개
 
+![p3 실시간](https://github.com/user-attachments/assets/288c1055-dc14-44ec-b4b9-38d2d05642af)
+
+<br>
 <img width="704" height="892" alt="실시간 모니터링p3" src="https://github.com/user-attachments/assets/5818991d-d3e3-40cd-a16c-8ae61104032d" />
 
 
@@ -368,6 +373,9 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 5개
 
+![p5 실시간](https://github.com/user-attachments/assets/3592bae7-ef18-4834-8ad4-1acd1490c5aa)
+
+<br>
 <img width="704" height="892" alt="실시간 모니터링p5" src="https://github.com/user-attachments/assets/ced25510-5ed5-4d3e-a193-9a7c4a2a187d" />
 
 
