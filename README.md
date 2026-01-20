@@ -361,7 +361,7 @@ k6 부하 테스트 도구를 사용했습니다.
 
 <br>
 <img width="673" height="870" alt="실시간 모니터링" src="https://github.com/user-attachments/assets/ddca4438-7e92-4589-b9e0-be60b4aa33fe" />
-
+<br>
 
 | 지표 | 값 |
 |------|-----|
@@ -373,6 +373,7 @@ k6 부하 테스트 도구를 사용했습니다.
 | 실제 처리 TPS | 431.00 msg/s |
 
 ---
+<br>
 
 ### 파티션 3개
 
@@ -380,7 +381,7 @@ k6 부하 테스트 도구를 사용했습니다.
 
 <br>
 <img width="704" height="892" alt="실시간 모니터링p3" src="https://github.com/user-attachments/assets/5818991d-d3e3-40cd-a16c-8ae61104032d" />
-
+<br>
 
 | 지표 | 값 |
 |------|-----|
@@ -399,7 +400,7 @@ k6 부하 테스트 도구를 사용했습니다.
 
 <br>
 <img width="704" height="892" alt="실시간 모니터링p5" src="https://github.com/user-attachments/assets/ced25510-5ed5-4d3e-a193-9a7c4a2a187d" />
-
+<br>
 
 | 지표 | 값 |
 |------|-----|
