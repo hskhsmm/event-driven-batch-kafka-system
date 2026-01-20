@@ -255,7 +255,8 @@ Redis 도입 후, Kafka 파티션 수에 따른 영향을 **세 가지 측정 �
 | 3 | 100,000 | **505.05** | 0.0023 | 0 |
 | 5 | 100,000 | **595.24** | 0.0018 | 0 |
 
-[사진]
+<img width="895" height="175" alt="db 결과" src="https://github.com/user-attachments/assets/f479fa02-e8ed-4d5c-bf8f-b4f1224ee1d4" />
+
 
 ### 지표 설명
 
@@ -282,7 +283,8 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 1개
 
-[사진]
+<img width="320" height="423" alt="카프카 결과1" src="https://github.com/user-attachments/assets/b68e5cf5-af14-486b-a7ec-447e13ad5331" />
+
 
 | 지표 | 값 |
 |------|-----|
@@ -297,7 +299,8 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 3개
 
-[사진]
+<img width="339" height="441" alt="카프카p3" src="https://github.com/user-attachments/assets/326caa87-88e0-47cd-8164-bfd920be1fee" />
+
 
 | 지표 | 값 |
 |------|-----|
@@ -312,7 +315,8 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 5개
 
-[사진]
+<img width="273" height="468" alt="카프카p5" src="https://github.com/user-attachments/assets/967bf49d-2409-440e-9a54-68be57a4446a" />
+
 
 | 지표 | 값 |
 |------|-----|
@@ -331,7 +335,9 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 1개
 
-[사진]
+
+<img width="673" height="870" alt="실시간 모니터링" src="https://github.com/user-attachments/assets/ddca4438-7e92-4589-b9e0-be60b4aa33fe" />
+
 
 | 지표 | 값 |
 |------|-----|
@@ -346,7 +352,8 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 3개
 
-[사진]
+<img width="704" height="892" alt="실시간 모니터링p3" src="https://github.com/user-attachments/assets/5818991d-d3e3-40cd-a16c-8ae61104032d" />
+
 
 | 지표 | 값 |
 |------|-----|
@@ -361,7 +368,8 @@ k6 부하 테스트 도구를 사용했습니다.
 
 ### 파티션 5개
 
-[사진]
+<img width="704" height="892" alt="실시간 모니터링p5" src="https://github.com/user-attachments/assets/ced25510-5ed5-4d3e-a193-9a7c4a2a187d" />
+
 
 | 지표 | 값 |
 |------|-----|
