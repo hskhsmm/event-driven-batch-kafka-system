@@ -2,10 +2,6 @@
 # 사용법: SPRING_PROFILES_ACTIVE=prod,p3
 
 spring:
-  kafka:
-    listener:
-      concurrency: 3  # Consumer 스레드 3개 (파티션 수와 동일)
-
   datasource:
     hikari:
       maximum-pool-size: 30     # 25 → 30 (Consumer 스레드 3개 + 여유)
