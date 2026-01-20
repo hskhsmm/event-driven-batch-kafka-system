@@ -150,18 +150,18 @@ Kafka 파티션 수 증가에 따라 다음과 같은 트레이드오프를 예�
 
 **부하 시작점**
 
-<img width="1096" height="125" alt="p1 부하 시작점" src="https://github.com/user-attachments/assets/1bcf617f-ea1b-43f4-ae47-88c122f27f85" />
+<img width="900" height="103" alt="p1 부하 시작점" src="https://github.com/user-attachments/assets/1bcf617f-ea1b-43f4-ae47-88c122f27f85" />
 <br>
 
 **부하 꺾이는 시점**
 
-<img width="1117" height="432" alt="image" src="https://github.com/user-attachments/assets/0d8facc0-c582-4794-8ac3-2261c78a09e2" />
+<img width="800" height="310" alt="image" src="https://github.com/user-attachments/assets/0d8facc0-c582-4794-8ac3-2261c78a09e2" />
 
 <br>
 
 **최고 CPU**
 
-<img width="1129" height="123" alt="모니터링 최고 cpu" src="https://github.com/user-attachments/assets/27de7fcc-3ea4-4c2a-839e-d270cbd08b4b" />
+<img width="900" height="98" alt="모니터링 최고 cpu" src="https://github.com/user-attachments/assets/27de7fcc-3ea4-4c2a-839e-d270cbd08b4b" />
 <br>
 
 **부하 지속 시간**: 100초
@@ -172,18 +172,18 @@ Kafka 파티션 수 증가에 따라 다음과 같은 트레이드오프를 예�
 
 **부하 시작점**
 
-<img width="1117" height="125" alt="p3 부하 시작점" src="https://github.com/user-attachments/assets/a55cdbd3-38e5-4f26-8209-660a857cda35" />
+<img width="900" height="101" alt="p3 부하 시작점" src="https://github.com/user-attachments/assets/a55cdbd3-38e5-4f26-8209-660a857cda35" />
 <br>
 
 **부하 꺾이는 시점**
 
-<img width="1105" height="450" alt="image" src="https://github.com/user-attachments/assets/a2c895db-5f58-4d84-ae65-d670b42057f2" />
+<img width="800" height="326" alt="image" src="https://github.com/user-attachments/assets/a2c895db-5f58-4d84-ae65-d670b42057f2" />
 
 <br>
 
 **최고 CPU**
 
-<img width="1218" height="120" alt="모니터링 최고 cpu p3" src="https://github.com/user-attachments/assets/27e43b20-8f1f-4555-8d12-b73b7e715be4" />
+<img width="900" height="89" alt="모니터링 최고 cpu p3" src="https://github.com/user-attachments/assets/27e43b20-8f1f-4555-8d12-b73b7e715be4" />
 <br>
 
 **부하 지속 시간**: 120초
@@ -194,18 +194,18 @@ Kafka 파티션 수 증가에 따라 다음과 같은 트레이드오프를 예�
 
 **부하 시작점**
 
-<img width="1122" height="125" alt="p5 부하 시작점" src="https://github.com/user-attachments/assets/20994b61-bfb2-436a-b426-9425a53b6a07" />
+<img width="900" height="100" alt="p5 부하 시작점" src="https://github.com/user-attachments/assets/20994b61-bfb2-436a-b426-9425a53b6a07" />
 <br>
 
 **부하 꺾이는 시점**
 
-<img width="1192" height="490" alt="image" src="https://github.com/user-attachments/assets/22a6bb61-aab8-40a6-a7ea-726ebd6249f0" />
+<img width="800" height="329" alt="image" src="https://github.com/user-attachments/assets/22a6bb61-aab8-40a6-a7ea-726ebd6249f0" />
 
 <br>
 
 **최고 CPU**
 
-<img width="1161" height="122" alt="모니터링 최고 cpu 파티션 5" src="https://github.com/user-attachments/assets/1df62012-08a7-4f36-8b2f-aae61bd78bc9" />
+<img width="900" height="95" alt="모니터링 최고 cpu 파티션 5" src="https://github.com/user-attachments/assets/1df62012-08a7-4f36-8b2f-aae61bd78bc9" />
 <br>
 
 **부하 지속 시간**: 128초
