@@ -4,6 +4,7 @@ import io.eventdriven.batchkafka.api.common.ApiResponse;
 import io.eventdriven.batchkafka.api.dto.request.ParticipationRequest;
 import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundException;
 import io.eventdriven.batchkafka.application.service.ParticipationService;
+import io.eventdriven.batchkafka.application.service.RedisStockService;
 import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
 import io.eventdriven.batchkafka.domain.repository.CampaignRepository;
@@ -26,6 +27,7 @@ public class ParticipationController {
     private final ParticipationService participationService;
     private final CampaignRepository campaignRepository;
     private final ParticipationHistoryRepository participationHistoryRepository;
+    private final RedisStockService redisStockService;
 
     /**
      * 선착순 참여 요청 (Kafka 방식 - 비동기)
@@ -100,18 +102,24 @@ public class ParticipationController {
         failCount = failCount != null ? failCount : 0L;
         Long totalCount = successCount + failCount;
 
+        // Redis에서 실시간 재고 조회 (없으면 MySQL fallback)
+        Long currentStock = redisStockService.getStock(id);
+        if (currentStock == null) {
+            currentStock = campaign.getCurrentStock();
+        }
+
         Map<String, Object> data = new HashMap<>();
         data.put("campaignId", campaign.getId());
         data.put("campaignName", campaign.getName());
         data.put("totalStock", campaign.getTotalStock());
-        data.put("currentStock", campaign.getCurrentStock());
+        data.put("currentStock", currentStock);
         data.put("successCount", successCount);
         data.put("failCount", failCount);
         data.put("totalParticipation", totalCount);
 
         // 재고 사용률 계산
         double usageRate = campaign.getTotalStock() > 0
-            ? (campaign.getTotalStock() - campaign.getCurrentStock()) * 100.0 / campaign.getTotalStock()
+            ? (campaign.getTotalStock() - currentStock) * 100.0 / campaign.getTotalStock()
             : 0.0;
         data.put("stockUsageRate", String.format("%.2f%%", usageRate));
 
