@@ -1,4 +1,4 @@
-# Event-Driven First-Come-First-Served Campaign System
+# 내 맘대로 캠페인
 
 > **10만 건 동시 트래픽 환경에서 공정한 선착순 처리를 보장하는 이벤트 시스템**
 >
