@@ -1,14 +1,28 @@
+# Graceful Shutdown 설정
+server:
+  shutdown: graceful
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 60s
+
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,readiness,liveness
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
   health:
     kafka:
       enabled: false   #  Actuator Kafka Health 완전 제거
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
 
 spring:
   datasource:
