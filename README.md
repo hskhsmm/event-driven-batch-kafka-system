@@ -380,7 +380,7 @@ k6 부하 테스트 도구를 사용했습니다.
 ![p3 실시간](https://github.com/user-attachments/assets/288c1055-dc14-44ec-b4b9-38d2d05642af)
 
 <br>
-<img width="500" height="633" alt="실시간 모니터링p3" src="https://github.com/user-attachments/assets/5818991d-d3e3-40cd-a16c-8ae61104032d" />
+<img width="500" height="633" alt="image" src="https://github.com/user-attachments/assets/6e6f83a9-e5db-4ccb-8aeb-a137854d6bcb" />
 <br>
 
 | 지표 | 값 |
