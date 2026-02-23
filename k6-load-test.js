@@ -64,7 +64,7 @@ export default function () {
 
   // 응답 검증
   const isSuccess = check(response, {
-    'status is 200': (r) => r.status === 200,
+    'status is 200 (선착순 통과) or 400 (재고 소진)': (r) => r.status === 200 || r.status === 400,
     'response has success field': (r) => {
       try {
         const body = JSON.parse(r.body);
@@ -75,11 +75,16 @@ export default function () {
     },
   });
 
-  // 성공/실패 카운트 (참고: Kafka 비동기 처리라 즉시 결과는 모름)
+  // 200: 선착순 통과 (PENDING 저장 + Kafka 발행)
+  // 400: 재고 소진 (즉시 마감 처리)
+  // 그 외: 서버 오류
   if (response.status === 200) {
     successCount.add(1);
+  } else if (response.status === 400) {
+    failCount.add(1);
   } else {
     failCount.add(1);
+    console.error(`[Iteration ${__ITER}] 예상치 못한 오류 - Status: ${response.status}, Body: ${response.body}`);
   }
 
   // 응답 로그 (샘플링 - 100번째마다)

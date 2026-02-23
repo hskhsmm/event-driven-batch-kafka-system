@@ -1,40 +1,50 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { Counter } from 'k6/metrics';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 
 /**
  * k6 선착순 정합성 검증 테스트
  *
- * 실행 방법:
- * 1. 캠페인 생성 (재고 50개)
- * 2. k6 run k6-verify-test.js
- * 3. 배치 실행 (집계)
- * 4. DB 확인 → 정확히 50개 성공했는지 검증
+ * 흐름:
+ * 1. POST /participation       → 200 (선착순 통과) or 400 (재고 소진)
+ * 2. 200이면 sleep(2초)        → Consumer가 PENDING → SUCCESS 확정할 시간
+ * 3. GET /result 폴링 (최대 3회) → PENDING / SUCCESS 확인
+ *
+ * 프론트 화면 시뮬레이션:
+ * 200 → "처리 중입니다" 스피너
+ * 400 → "마감됐습니다" 팝업
+ * SUCCESS → "쿠폰이 발급됐습니다!" 팝업
  */
 
 const BASE_URL = 'http://localhost:8080';
 
+// 커스텀 메트릭
+const acceptedCount = new Counter('participation_accepted');   // 선착순 통과 (200)
+const rejectedCount = new Counter('participation_rejected');   // 재고 소진 (400)
+const confirmedCount = new Counter('participation_confirmed'); // 최종 SUCCESS 확정
+const pendingCount = new Counter('participation_still_pending'); // 폴링 후에도 PENDING
+
 export const options = {
   stages: [
-    { duration: '1s', target: 100 }, // 1초간 100명으로 증가
-    { duration: '2s', target: 0 },   // 2초간 0명으로 감소 (정리)
+    { duration: '1s', target: 100 },
+    { duration: '2s', target: 0 },
   ],
   thresholds: {
-    http_req_duration: ['p(95)<1000'], // 95%가 1초 이내
+    http_req_duration: ['p(95)<1000'],
   },
 };
 
 export function setup() {
   console.log('========================================');
-  console.log('🚀 선착순 부하 테스트 시작');
+  console.log('🚀 선착순 정합성 검증 테스트 시작');
   console.log('========================================');
   console.log('테스트 시나리오:');
   console.log('  - 동시 요청: 100명');
   console.log('  - 예상 재고: 50개');
-  console.log('  - 예상 결과: 성공 50건, 나머지는 재고 부족');
+  console.log('  - 흐름: 참여 요청 → 결과 폴링 (프론트 시뮬레이션)');
   console.log('========================================\n');
 
-  // 관리자 API로 캠페인 목록 조회 (테스트용)
   const campaignsRes = http.get(`${BASE_URL}/api/admin/campaigns`);
 
   if (campaignsRes.status === 200) {
@@ -49,7 +59,6 @@ export function setup() {
         console.log(`   이름: ${campaign.name}`);
         console.log(`   현재 재고: ${campaign.currentStock}/${campaign.totalStock}`);
         console.log('========================================\n');
-
         return { campaignId: campaign.id };
       }
     } catch (err) {
@@ -65,57 +74,92 @@ export default function (data) {
   const campaignId = data.campaignId;
   const userId = 10000 + __VU; // 10001~10100 (고유한 사용자 ID)
 
-  const payload = JSON.stringify({
-    userId: userId,
-  });
-
   const params = {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
   };
 
-  const response = http.post(
+  // ── STEP 1. 선착순 참여 요청 ──────────────────────────────
+  const participateRes = http.post(
     `${BASE_URL}/api/campaigns/${campaignId}/participation`,
-    payload,
+    JSON.stringify({ userId }),
     params
   );
 
-  check(response, {
-    'API 응답 성공 (200)': (r) => r.status === 200,
-    'ApiResponse 형식': (r) => {
-      try {
-        const body = JSON.parse(r.body);
-        return body.success !== undefined;
-      } catch (e) {
-        return false;
-      }
-    },
+  const participateBody = JSON.parse(participateRes.body);
+
+  check(participateRes, {
+    '참여 요청: 200 or 400': (r) => r.status === 200 || r.status === 400,
+    '참여 요청: ApiResponse 형식': (r) => participateBody.success !== undefined,
   });
 
-  // 10명마다 로그 출력
-  if (__VU % 10 === 0) {
-    console.log(`[사용자 ${userId}] 요청 완료 - Status: ${response.status}`);
+  // ── STEP 2. 재고 소진이면 즉시 종료 ──────────────────────
+  if (participateRes.status === 400) {
+    rejectedCount.add(1);
+    console.log(`[User ${userId}] 🚫 재고 소진 → "${participateBody.message}"`);
+    return;
+  }
+
+  // ── STEP 3. 선착순 통과 → 결과 폴링 (프론트 스피너 시뮬레이션) ──
+  acceptedCount.add(1);
+  console.log(`[User ${userId}] ✅ 선착순 통과 → "${participateBody.message}"`);
+
+  // Consumer가 PENDING → SUCCESS 확정할 시간 대기 (프론트 스피너)
+  sleep(2);
+
+  // 최대 3회 폴링 (2초 간격)
+  let finalStatus = 'PENDING';
+  for (let i = 1; i <= 3; i++) {
+    const resultRes = http.get(
+      `${BASE_URL}/api/campaigns/${campaignId}/participation/${userId}/result`,
+      params
+    );
+
+    check(resultRes, {
+      '결과 조회: 200': (r) => r.status === 200,
+    });
+
+    if (resultRes.status === 200) {
+      const resultBody = JSON.parse(resultRes.body);
+      finalStatus = resultBody.data.status;
+
+      console.log(`[User ${userId}] 📊 결과 조회 ${i}회차 → ${finalStatus}: "${resultBody.data.message}"`);
+
+      if (finalStatus === 'SUCCESS') {
+        confirmedCount.add(1);
+        console.log(`[User ${userId}] 🎉 최종 확정: 쿠폰 발급 완료!`);
+        break;
+      }
+    }
+
+    // 아직 PENDING이면 2초 후 재시도
+    if (i < 3) sleep(2);
+  }
+
+  // 3회 폴링 후에도 PENDING이면 카운트
+  if (finalStatus === 'PENDING') {
+    pendingCount.add(1);
+    console.log(`[User ${userId}] ⏳ 3회 폴링 후에도 PENDING (Consumer 처리 지연)`);
   }
 }
 
 export function teardown(data) {
   console.log('\n========================================');
-  console.log('✅ 부하 테스트 완료');
+  console.log('✅ 정합성 검증 테스트 완료');
   console.log('========================================');
-  console.log('다음 단계:');
-  console.log('  1. Kafka Consumer 처리 대기 (5~10초)');
-  console.log('  2. 배치 집계 실행:');
-  console.log('     POST http://localhost:8080/api/admin/batch/aggregate?date=2025-12-28');
-  console.log('  3. 통계 확인:');
-  console.log('     GET http://localhost:8080/api/admin/stats/daily?date=2025-12-28');
-  console.log('  4. DB 직접 확인:');
-  console.log('     SELECT status, COUNT(*) FROM participation_history GROUP BY status;');
+  console.log('커스텀 메트릭 확인:');
+  console.log('  - participation_accepted:      선착순 통과 수 (재고 수와 일치해야 함)');
+  console.log('  - participation_rejected:      재고 소진 수');
+  console.log('  - participation_confirmed:     최종 SUCCESS 확정 수');
+  console.log('  - participation_still_pending: 폴링 후에도 PENDING (Consumer 지연)');
+  console.log('========================================');
+  console.log('DB 직접 확인:');
+  console.log('  SELECT status, COUNT(*) FROM participation_history GROUP BY status;');
   console.log('========================================');
   console.log('예상 결과:');
-  console.log('  - SUCCESS: 50건');
-  console.log('  - FAIL: 50건');
-  console.log('  - campaign.current_stock = 0');
+  console.log('  - accepted = 재고 수 (예: 50)');
+  console.log('  - rejected = 나머지 (예: 50)');
+  console.log('  - confirmed = accepted와 동일 (모두 SUCCESS 확정)');
+  console.log('  - still_pending = 0 (정상 처리 시)');
   console.log('========================================\n');
 }
 
