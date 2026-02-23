@@ -59,6 +59,15 @@ public class ParticipationHistory extends BaseTimeEntity {
         this.status = status;
     }
 
+    /**
+     * Consumer에서 Kafka 메타데이터 업데이트 (추적 및 멱등성 체크용)
+     */
+    public void updateKafkaMetadata(Integer partition, Long offset, Long timestamp) {
+        this.kafkaPartition = partition;
+        this.kafkaOffset = offset;
+        this.kafkaTimestamp = timestamp;
+    }
+
     // Kafka 메타데이터 포함 생성자
     public ParticipationHistory(Campaign campaign, Long userId, ParticipationStatus status,
                                 Long kafkaOffset, Integer kafkaPartition, Long kafkaTimestamp,

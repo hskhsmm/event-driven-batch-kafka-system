@@ -1,15 +1,10 @@
 package io.eventdriven.batchkafka.application.consumer;
 
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
-import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundException;
 import io.eventdriven.batchkafka.application.event.ParticipationEvent;
 import io.eventdriven.batchkafka.application.service.ProcessingLogService;
-import io.eventdriven.batchkafka.application.service.RedisStockService;
-import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
 import io.eventdriven.batchkafka.domain.entity.ParticipationStatus;
-import io.eventdriven.batchkafka.domain.repository.CampaignRepository;
 import io.eventdriven.batchkafka.domain.repository.ParticipationHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,10 +19,20 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * 선착순 참여 이벤트 Consumer (배치 처리 방식)
+ * 선착순 참여 이벤트 Consumer
+ *
+ * 역할 변경:
+ * - 기존: Redis 재고 차감 + DB 신규 저장
+ * - 변경: API 단에서 저장된 PENDING 레코드를 SUCCESS/FAIL로 확정만 처리
+ *
+ * 이렇게 바꾼 이유:
+ * - 재고 차감이 API 단(Redis)으로 이동했으므로 Consumer에서 차감하면 중복 차감 발생
+ * - 서버 다운 후 재처리 시에도 PENDING 레코드를 찾아 업데이트할 뿐 재고에 영향 없음
+ * - update 방식이라 같은 메시지가 두 번 와도 자연스럽게 멱등성 보장
  */
 @Slf4j
 @Component
@@ -35,22 +40,17 @@ import java.util.stream.Collectors;
 public class ParticipationEventConsumer {
 
     private final JsonMapper jsonMapper;
-    private final CampaignRepository campaignRepository;
     private final ParticipationHistoryRepository participationHistoryRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ProcessingLogService processingLogService;
-    private final RedisStockService redisStockService;
 
     private static final String DLQ_TOPIC = "campaign-participation-topic.dlq";
-    private static final int LOG_INTERVAL = 10000; // 10000건마다 로그 (10만 트래픽 최적화)
+    private static final int LOG_INTERVAL = 10000;
 
-    // 처리 건수 카운터 (메모리 기반, 재시작 시 초기화)
     private long processedCount = 0;
     private long successCount = 0;
     private long failCount = 0;
-
-    // 처리 순서 번호 (순서 보장 증명용)
-    private final java.util.concurrent.atomic.AtomicLong processingSequence = new java.util.concurrent.atomic.AtomicLong(0);
+    private long skipCount = 0; // 중복 메시지 스킵 카운터
 
     @KafkaListener(
             topics = "campaign-participation-topic",
@@ -59,61 +59,86 @@ public class ParticipationEventConsumer {
     )
     @Transactional
     public void consumeParticipationEvent(List<ConsumerRecord<String, String>> records, Acknowledgment acknowledgment) {
-        log.info("📨 Kafka 배치 수신. 사이즈: {}건", records.size());
+        log.info("Kafka 배치 수신. 사이즈: {}건", records.size());
 
         try {
             for (ConsumerRecord<String, String> record : records) {
                 processRecord(record);
             }
             acknowledgment.acknowledge();
-            log.info("✅ 배치 처리 완료 및 커밋. 사이즈: {}건", records.size());
+            log.info("배치 처리 완료 및 커밋. 사이즈: {}건", records.size());
 
         } catch (Exception e) {
-            // @Transactional에 의해 롤백되므로, 여기서는 DLQ 전송 및 원본 메시지 커밋만 처리
-            log.error("🚨 배치 처리 중 심각한 오류 발생. 배치 전체(총 {}건)를 DLQ로 전송합니다.", records.size(), e);
+            log.error("배치 처리 중 심각한 오류 발생. 배치 전체(총 {}건)를 DLQ로 전송합니다.", records.size(), e);
             sendBatchToDlq(records, "BATCH_PROCESSING_ERROR", e);
-            acknowledgment.acknowledge(); // 오류 발생한 배치는 재처리하지 않도록 커밋
+            acknowledgment.acknowledge();
         }
     }
 
-    /**
-     * 단일 레코드 처리
-     */
     private void processRecord(ConsumerRecord<String, String> record) {
         String message = record.value();
+
         try {
-            // 1. JSON 파싱
+            // 1. 중복 메시지 체크 (멱등성 보장)
+            // partition + offset 조합은 Kafka에서 전역 유일 보장
+            // 서버 다운 후 재처리 시 이미 처리된 메시지 스킵
+            if (participationHistoryRepository.existsByKafkaPartitionAndKafkaOffset(
+                    record.partition(), record.offset())) {
+                log.warn("중복 메시지 스킵 - partition: {}, offset: {}", record.partition(), record.offset());
+                skipCount++;
+                return;
+            }
+
+            // 2. JSON 파싱
             ParticipationEvent event = parseMessage(message);
 
-            // 2. Kafka 메타데이터 설정
-            event.setKafkaOffset(record.offset());
-            event.setKafkaPartition(record.partition());
-            event.setKafkaTimestamp(record.timestamp());
+            // 3. PENDING 레코드 찾아서 SUCCESS로 확정
+            // API 단에서 이미 Redis 차감 + PENDING 저장이 완료된 상태
+            // Consumer는 확정 역할만 담당
+            confirmPendingRecord(event, record);
 
-            // 3. 처리 순서 번호 부여 (순서 보장 증명용 - Consumer가 처리하는 순서)
-            long sequence = processingSequence.incrementAndGet();
-            event.setProcessingSequence(sequence);
-
-            // 4. 비즈니스 로직 실행
-            ParticipationStatus status = processParticipation(event);
-
-            // 4. 카운터 업데이트 및 로깅
-            updateCountersAndLog(event, status);
-
-        } catch (IllegalArgumentException | CampaignNotFoundException e) {
-            // JSON 파싱 오류 또는 캠페인 없음 등 복구 불가능한 단일 메시지 오류
-            log.error("❌ 복구 불가능한 메시지 오류 - DLQ로 전송: {}", message, e);
+        } catch (IllegalArgumentException e) {
+            log.error("복구 불가능한 메시지 오류 - DLQ로 전송: {}", message, e);
             sendToDlq(message, e.getClass().getSimpleName(), e);
-            // 전체 배치를 중단시키지 않고 계속 진행. 트랜잭션은 롤백될 것임.
-            // 하지만 이런 메시지가 있다면 전체 배치가 실패하게 되므로, 예외를 다시 던져서 롤백을 유도해야함.
             throw e;
         }
-        // DataAccessException 등 다른 RuntimeException은 @Transactional에 의해 자동으로 롤백 처리됨
     }
-    
+
     /**
-     * 메시지 파싱
+     * PENDING → SUCCESS 확정 처리
+     *
+     * PENDING 레코드가 없는 경우:
+     * - API 단에서 저장 전에 Kafka 메시지가 먼저 도착한 엣지 케이스
+     * - DLQ로 보내지 않고 로그만 남김 (재처리 시 PENDING이 생길 수 있음)
      */
+    private void confirmPendingRecord(ParticipationEvent event, ConsumerRecord<String, String> record) {
+        Optional<ParticipationHistory> pendingHistory = participationHistoryRepository
+                .findByCampaignIdAndUserIdAndStatus(
+                        event.getCampaignId(),
+                        event.getUserId(),
+                        ParticipationStatus.PENDING
+                );
+
+        if (pendingHistory.isEmpty()) {
+            log.warn("PENDING 레코드 없음 - Campaign: {}, User: {}, partition: {}, offset: {}",
+                    event.getCampaignId(), event.getUserId(), record.partition(), record.offset());
+            return;
+        }
+
+        ParticipationHistory history = pendingHistory.get();
+
+        // PENDING → SUCCESS 확정
+        history.updateStatus(ParticipationStatus.SUCCESS);
+
+        // Kafka 메타데이터 업데이트 (추적용)
+        history.updateKafkaMetadata(record.partition(), record.offset(), record.timestamp());
+
+        log.info("확정 완료 - Campaign: {}, User: {}, HistoryId: {}",
+                event.getCampaignId(), event.getUserId(), history.getId());
+
+        updateCountersAndLog(event, ParticipationStatus.SUCCESS);
+    }
+
     private ParticipationEvent parseMessage(String message) {
         try {
             return jsonMapper.readValue(message, ParticipationEvent.class);
@@ -122,40 +147,6 @@ public class ParticipationEventConsumer {
         }
     }
 
-    /**
-     * 참여 처리 비즈니스 로직
-     */
-    private ParticipationStatus processParticipation(ParticipationEvent event) {
-        // 1. Redis 원자적 재고 차감 (반환값: 0 이상=성공, -1=실패)
-        Long remainingStock = redisStockService.decreaseStock(event.getCampaignId());
-
-        ParticipationStatus status;
-        if (remainingStock >= 0) {
-            status = ParticipationStatus.SUCCESS;
-        } else {
-            status = ParticipationStatus.FAIL;
-        }
-
-        // 2. 참여 이력 저장 (Kafka 메타데이터 + 처리 순서 번호 포함)
-        Campaign campaign = campaignRepository.findById(event.getCampaignId())
-                .orElseThrow(() -> new CampaignNotFoundException(event.getCampaignId()));
-        ParticipationHistory history = new ParticipationHistory(
-                campaign,
-                event.getUserId(),
-                status,
-                event.getKafkaOffset(),
-                event.getKafkaPartition(),
-                event.getKafkaTimestamp(),
-                event.getProcessingSequence() // 처리 순서 번호 (순서 보장 증명)
-        );
-        participationHistoryRepository.save(history);
-
-        return status;
-    }
-    
-    /**
-     * 카운터 업데이트 및 1000건마다 로그
-     */
     private synchronized void updateCountersAndLog(ParticipationEvent event, ParticipationStatus status) {
         processedCount++;
 
@@ -167,19 +158,15 @@ public class ParticipationEventConsumer {
 
         if (processedCount % LOG_INTERVAL == 0) {
             String logMessage = String.format(
-                    "[Kafka Consumer] 처리 건수: %,d건 | 성공: %,d | 실패: %,d | 최근 처리: Campaign=%d, User=%d, Partition=%d, Offset=%d",
-                    processedCount, successCount, failCount,
-                    event.getCampaignId(), event.getUserId(),
-                    event.getKafkaPartition(), event.getKafkaOffset()
+                    "[Kafka Consumer] 처리: %,d건 | 성공: %,d | 실패: %,d | 중복스킵: %,d | Campaign=%d, User=%d",
+                    processedCount, successCount, failCount, skipCount,
+                    event.getCampaignId(), event.getUserId()
             );
             processingLogService.info(logMessage);
-            log.info("📊 " + logMessage);
+            log.info(logMessage);
         }
     }
 
-    /**
-     * Dead Letter Queue로 단일 메시지 전송
-     */
     private void sendToDlq(String originalMessage, String errorReason, Exception exception) {
         try {
             Map<String, Object> dlqMessage = new HashMap<>();
@@ -191,20 +178,16 @@ public class ParticipationEventConsumer {
 
             String dlqPayload = jsonMapper.writeValueAsString(dlqMessage);
             kafkaTemplate.send(DLQ_TOPIC, dlqPayload);
-            log.info("📤 DLQ 전송 완료 - 사유: {}, 토픽: {}", errorReason, DLQ_TOPIC);
+            log.info("DLQ 전송 완료 - 사유: {}", errorReason);
         } catch (Exception e) {
-            log.error("🚨 CRITICAL: DLQ 전송 실패! 원본 메시지: {}", originalMessage, e);
+            log.error("CRITICAL: DLQ 전송 실패! 원본 메시지: {}", originalMessage, e);
         }
     }
 
-    /**
-     * Dead Letter Queue로 배치 메시지 전송
-     */
     private void sendBatchToDlq(List<ConsumerRecord<String, String>> records, String errorReason, Exception exception) {
-        log.info("배치 DLQ 전송 시작. 총 {}건", records.size());
         List<String> originalMessages = records.stream()
-                                               .map(ConsumerRecord::value)
-                                               .collect(Collectors.toList());
+                .map(ConsumerRecord::value)
+                .collect(Collectors.toList());
         try {
             Map<String, Object> dlqMessage = new HashMap<>();
             dlqMessage.put("originalMessages", originalMessages);
@@ -216,9 +199,9 @@ public class ParticipationEventConsumer {
 
             String dlqPayload = jsonMapper.writeValueAsString(dlqMessage);
             kafkaTemplate.send(DLQ_TOPIC, dlqPayload);
-            log.info("📤 배치 DLQ 전송 완료 - 사유: {}, 토픽: {}", errorReason, DLQ_TOPIC);
+            log.info("배치 DLQ 전송 완료 - 사유: {}", errorReason);
         } catch (Exception e) {
-            log.error("🚨 CRITICAL: 배치 DLQ 전송 실패! 전체 메시지를 개별적으로 로깅합니다.", e);
+            log.error("CRITICAL: 배치 DLQ 전송 실패!", e);
             for (String msg : originalMessages) {
                 log.error("배치 DLQ 실패 개별 메시지: {}", msg);
             }
