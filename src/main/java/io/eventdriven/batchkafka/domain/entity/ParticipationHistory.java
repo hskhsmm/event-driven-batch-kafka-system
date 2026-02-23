@@ -51,6 +51,14 @@ public class ParticipationHistory extends BaseTimeEntity {
         this.status = status;
     }
 
+    /**
+     * Consumer에서 PENDING → SUCCESS / FAIL 확정 시 호출
+     * JPA Dirty Checking으로 update 쿼리 자동 실행
+     */
+    public void updateStatus(ParticipationStatus status) {
+        this.status = status;
+    }
+
     // Kafka 메타데이터 포함 생성자
     public ParticipationHistory(Campaign campaign, Long userId, ParticipationStatus status,
                                 Long kafkaOffset, Integer kafkaPartition, Long kafkaTimestamp,
