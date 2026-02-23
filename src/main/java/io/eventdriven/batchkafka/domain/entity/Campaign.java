@@ -38,4 +38,10 @@ public class Campaign extends BaseTimeEntity {
     public void close() {
         this.status = CampaignStatus.CLOSED;
     }
+
+    public void decreaseStock() {
+        if (this.currentStock > 0) {
+            this.currentStock--;
+        }
+    }
 }

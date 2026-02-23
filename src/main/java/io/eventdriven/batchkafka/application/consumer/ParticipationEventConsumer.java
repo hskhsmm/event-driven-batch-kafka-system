@@ -3,8 +3,10 @@ package io.eventdriven.batchkafka.application.consumer;
 import tools.jackson.databind.json.JsonMapper;
 import io.eventdriven.batchkafka.application.event.ParticipationEvent;
 import io.eventdriven.batchkafka.application.service.ProcessingLogService;
+import io.eventdriven.batchkafka.domain.entity.Campaign;
 import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
 import io.eventdriven.batchkafka.domain.entity.ParticipationStatus;
+import io.eventdriven.batchkafka.domain.repository.CampaignRepository;
 import io.eventdriven.batchkafka.domain.repository.ParticipationHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +43,7 @@ public class ParticipationEventConsumer {
 
     private final JsonMapper jsonMapper;
     private final ParticipationHistoryRepository participationHistoryRepository;
+    private final CampaignRepository campaignRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ProcessingLogService processingLogService;
 
@@ -132,6 +135,9 @@ public class ParticipationEventConsumer {
 
         // Kafka 메타데이터 업데이트 (추적용)
         history.updateKafkaMetadata(record.partition(), record.offset(), record.timestamp());
+
+        // Campaign DB current_stock 동기화 (페이지 재고 표시용)
+        campaignRepository.findById(event.getCampaignId()).ifPresent(Campaign::decreaseStock);
 
         log.info("확정 완료 - Campaign: {}, User: {}, HistoryId: {}",
                 event.getCampaignId(), event.getUserId(), history.getId());

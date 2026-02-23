@@ -32,7 +32,11 @@ public class CampaignService {
 
     public List<CampaignResponse> getCampaigns() {
         return campaignRepository.findAll().stream()
-                .map(CampaignResponse::new)
+                .map(campaign -> {
+                    // Redis 재고를 우선 사용 (실시간 반영), 없으면 DB fallback
+                    Long redisStock = redisStockService.getStock(campaign.getId());
+                    return new CampaignResponse(campaign, redisStock);
+                })
                 .collect(Collectors.toList());
     }
 }

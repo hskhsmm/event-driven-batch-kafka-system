@@ -23,4 +23,12 @@ public class CampaignResponse {
         this.status = campaign.getStatus();
         this.createdAt = campaign.getCreatedAt();
     }
+
+    // Redis 실시간 재고 우선 반영용
+    public CampaignResponse(Campaign campaign, Long redisStock) {
+        this(campaign);
+        if (redisStock != null) {
+            this.currentStock = redisStock;
+        }
+    }
 }
