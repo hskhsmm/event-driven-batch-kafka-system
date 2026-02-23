@@ -1,14 +1,21 @@
 package io.eventdriven.batchkafka.application.service;
 
 import tools.jackson.databind.json.JsonMapper;
+import io.eventdriven.batchkafka.api.exception.business.CampaignNotFoundException;
 import io.eventdriven.batchkafka.api.exception.infrastructure.KafkaPublishException;
 import io.eventdriven.batchkafka.api.exception.infrastructure.KafkaSerializationException;
 import io.eventdriven.batchkafka.application.event.ParticipationEvent;
+import io.eventdriven.batchkafka.domain.entity.Campaign;
+import io.eventdriven.batchkafka.domain.entity.ParticipationHistory;
+import io.eventdriven.batchkafka.domain.entity.ParticipationStatus;
+import io.eventdriven.batchkafka.domain.repository.CampaignRepository;
+import io.eventdriven.batchkafka.domain.repository.ParticipationHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -19,44 +26,73 @@ public class ParticipationService {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final JsonMapper jsonMapper;
+    private final RedisStockService redisStockService;
+    private final CampaignRepository campaignRepository;
+    private final ParticipationHistoryRepository participationHistoryRepository;
 
     private static final String TOPIC = "campaign-participation-topic";
 
     /**
-     * 선착순 참여 요청 처리 (비동기 + 콜백)
-     * - Kafka로 이벤트 발행
-     * - 전송 결과를 비동기로 확인하여 실패 시 로깅 및 알림
+     * 선착순 참여 요청 처리
+     *
+     * 흐름:
+     * 1. Redis Lua 원자적 재고 차감 (선착순 판별)
+     *    - 실패 시 즉시 "마감됐습니다" 반환 (Kafka 발행 안 함)
+     * 2. PENDING 상태로 participation_history DB 저장 (선착순 자리 확보)
+     * 3. Kafka 발행 (Consumer가 PENDING → SUCCESS 확정)
+     *
+     * 이렇게 하는 이유:
+     * - 재고 차감을 Consumer에서 하면 서버 다운 후 재처리 시 중복 차감 발생
+     * - API 단에서 차감하면 Kafka 메시지는 이미 선착순 통과된 것만 존재
+     * - PENDING이 DB에 먼저 박히므로 서버 다운 후 재시작해도 자리 보장
      */
-    public void participate(Long campaignId, Long userId) {
+    @Transactional
+    public boolean participate(Long campaignId, Long userId) {
+        // 1. Redis 원자적 재고 차감 (선착순 판별)
+        Long remainingStock = redisStockService.decreaseStock(campaignId);
+
+        if (remainingStock < 0) {
+            // 재고 없음 → 즉시 실패 반환 (Kafka 발행 안 함)
+            log.info(" 재고 소진 - Campaign: {}, User: {}", campaignId, userId);
+            return false;
+        }
+
+        // 2. PENDING 상태로 DB 선점 (선착순 자리 확보)
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new CampaignNotFoundException(campaignId));
+
+        ParticipationHistory history = new ParticipationHistory(campaign, userId, ParticipationStatus.PENDING);
+        participationHistoryRepository.save(history);
+        log.info("PENDING 저장 - Campaign: {}, User: {}, HistoryId: {}", campaignId, userId, history.getId());
+
+        // 3. Kafka 발행 (Consumer가 PENDING → SUCCESS 확정)
+        publishToKafka(campaignId, userId);
+
+        return true;
+    }
+
+    /**
+     * Kafka 이벤트 발행
+     */
+    private void publishToKafka(Long campaignId, Long userId) {
         ParticipationEvent event = new ParticipationEvent(campaignId, userId);
 
         try {
-            // 1. JSON 직렬화
             String message = jsonMapper.writeValueAsString(event);
 
-            // Key를 null로 설정하여 round-robin 방식으로 파티션 분산
-            // 같은 campaignId를 key로 사용하면 모든 메시지가 같은 파티션으로 가서 순서 보장됨
-            // null을 사용하면 3개 파티션에 균등 분산되어 순서가 섞임
-            String key = null;
-
-            // 2. Kafka 전송 (비동기 + 콜백)
             CompletableFuture<SendResult<String, String>> future =
-                    kafkaTemplate.send(TOPIC, key, message);
+                    kafkaTemplate.send(TOPIC, null, message);
 
-            // 3. 전송 결과 콜백 처리
             future.whenComplete((result, ex) -> {
                 if (ex != null) {
-                    // 전송 실패
                     handleKafkaPublishFailure(campaignId, userId, message, ex);
                 } else {
-                    // 전송 성공
                     handleKafkaPublishSuccess(campaignId, userId, result);
                 }
             });
 
         } catch (Exception e) {
-            // JSON 직렬화 실패
-            log.error("🚨 JSON 직렬화 실패 - Campaign ID: {}, User ID: {}", campaignId, userId, e);
+            log.error("JSON 직렬화 실패 - Campaign ID: {}, User ID: {}", campaignId, userId, e);
             throw new KafkaSerializationException(e);
         }
     }
@@ -65,34 +101,21 @@ public class ParticipationService {
      * Kafka 전송 성공 처리
      */
     private void handleKafkaPublishSuccess(Long campaignId, Long userId, SendResult<String, String> result) {
-        log.info("✅ Kafka 전송 성공 - Campaign ID: {}, User ID: {}, Offset: {}, Partition: {}",
+        log.info("Kafka 전송 성공 - Campaign ID: {}, User ID: {}, Offset: {}, Partition: {}",
                 campaignId,
                 userId,
                 result.getRecordMetadata().offset(),
                 result.getRecordMetadata().partition());
-
-        // TODO: 메트릭 수집 (Prometheus 등)
-        // meterRegistry.counter("kafka.publish.success", "topic", TOPIC).increment();
     }
 
     /**
      * Kafka 전송 실패 처리
      */
     private void handleKafkaPublishFailure(Long campaignId, Long userId, String message, Throwable ex) {
-        log.error("🚨 Kafka 전송 실패 - Campaign ID: {}, User ID: {}, Message: {}",
+        log.error("Kafka 전송 실패 - Campaign ID: {}, User ID: {}, Message: {}",
                 campaignId, userId, message, ex);
-
-        // 운영자 알림 (실제 환경에서는 Slack, Email 등으로 전송)
-        log.error("🔔 [ALERT] Kafka 전송 실패 - 데이터 손실 위험! Campaign ID: {}, User ID: {}",
+        log.error("[ALERT] Kafka 전송 실패 - 데이터 손실 위험! Campaign ID: {}, User ID: {}",
                 campaignId, userId);
-
-        // TODO: 실패한 메시지를 별도 저장 (DB 또는 파일)
-        // failureRepository.save(new KafkaFailureLog(campaignId, userId, message, ex.getMessage()));
-
-        // TODO: 메트릭 수집
-        // meterRegistry.counter("kafka.publish.failure", "topic", TOPIC).increment();
-
-        // 사용자에게는 일반적인 오류 메시지를 던짐 (GlobalExceptionHandler가 처리)
         throw new KafkaPublishException(TOPIC, ex);
     }
 }
