@@ -43,7 +43,7 @@ class AggregateParticipationTasklet implements Tasklet {
                 try {
                     start = LocalDateTime.parse(String.valueOf(params.get("start")));
                     end = LocalDateTime.parse(String.valueOf(params.get("end")));
-                    log.info("🔄 집계 시작 - 기간: {} ~ {}", start, end);
+                    log.info("집계 시작 - 기간: {} ~ {}", start, end);
                 } catch (DateTimeParseException e) {
                     log.error("❌ 날짜 파싱 실패 - start: {}, end: {}",
                             params.get("start"), params.get("end"), e);
@@ -56,7 +56,7 @@ class AggregateParticipationTasklet implements Tasklet {
                     LocalDate date = LocalDate.parse(String.valueOf(params.get("date")));
                     start = date.atStartOfDay();
                     end = date.plusDays(1).atStartOfDay();
-                    log.info("🔄 집계 시작 - 날짜: {}", date.format(DateTimeFormatter.ISO_DATE));
+                    log.info("집계 시작 - 날짜: {}", date.format(DateTimeFormatter.ISO_DATE));
                 } catch (DateTimeParseException e) {
                     log.error("❌ 날짜 파싱 실패 - date: {}", params.get("date"), e);
                     contribution.setExitStatus(ExitStatus.FAILED
