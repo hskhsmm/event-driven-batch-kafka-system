@@ -35,7 +35,7 @@ public class RedisStockService {
     public void initializeStock(Long campaignId, Long stock) {
         String key = getStockKey(campaignId);
         redisTemplate.opsForValue().set(key, String.valueOf(stock));
-        log.info("📦 Redis 재고 초기화 - Campaign: {}, Stock: {}", campaignId, stock);
+        log.info("Redis 재고 초기화 - Campaign: {}, Stock: {}", campaignId, stock);
     }
 
     /**
@@ -75,7 +75,7 @@ public class RedisStockService {
     public void deleteStock(Long campaignId) {
         String key = getStockKey(campaignId);
         redisTemplate.delete(key);
-        log.info("🗑️ Redis 재고 삭제 - Campaign: {}", campaignId);
+        log.info("Redis 재고 삭제 - Campaign: {}", campaignId);
     }
 
     /**

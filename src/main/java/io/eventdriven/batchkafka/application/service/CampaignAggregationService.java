@@ -55,7 +55,7 @@ public class CampaignAggregationService {
 
         int updated = jdbcTemplate.update(sql, params);
 
-        log.info("✓ 전체 캠페인 일괄 집계 완료 - {} 행 업데이트", updated);
+        log.info("✅ 전체 캠페인 일괄 집계 완료 - {} 행 업데이트", updated);
 
         return updated;
     }

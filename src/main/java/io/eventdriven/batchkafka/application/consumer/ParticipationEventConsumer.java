@@ -59,18 +59,18 @@ public class ParticipationEventConsumer {
     )
     @Transactional
     public void consumeParticipationEvent(List<ConsumerRecord<String, String>> records, Acknowledgment acknowledgment) {
-        log.info("📨 Kafka 배치 수신. 사이즈: {}건", records.size());
+        log.info("Kafka 배치 수신. 사이즈: {}건", records.size());
 
         try {
             for (ConsumerRecord<String, String> record : records) {
                 processRecord(record);
             }
             acknowledgment.acknowledge();
-            log.info("✅ 배치 처리 완료 및 커밋. 사이즈: {}건", records.size());
+            log.info("배치 처리 완료 및 커밋. 사이즈: {}건", records.size());
 
         } catch (Exception e) {
             // @Transactional에 의해 롤백되므로, 여기서는 DLQ 전송 및 원본 메시지 커밋만 처리
-            log.error("🚨 배치 처리 중 심각한 오류 발생. 배치 전체(총 {}건)를 DLQ로 전송합니다.", records.size(), e);
+            log.error("배치 처리 중 심각한 오류 발생. 배치 전체(총 {}건)를 DLQ로 전송합니다.", records.size(), e);
             sendBatchToDlq(records, "BATCH_PROCESSING_ERROR", e);
             acknowledgment.acknowledge(); // 오류 발생한 배치는 재처리하지 않도록 커밋
         }
@@ -102,7 +102,7 @@ public class ParticipationEventConsumer {
 
         } catch (IllegalArgumentException | CampaignNotFoundException e) {
             // JSON 파싱 오류 또는 캠페인 없음 등 복구 불가능한 단일 메시지 오류
-            log.error("❌ 복구 불가능한 메시지 오류 - DLQ로 전송: {}", message, e);
+            log.error("복구 불가능한 메시지 오류 - DLQ로 전송: {}", message, e);
             sendToDlq(message, e.getClass().getSimpleName(), e);
             // 전체 배치를 중단시키지 않고 계속 진행. 트랜잭션은 롤백될 것임.
             // 하지만 이런 메시지가 있다면 전체 배치가 실패하게 되므로, 예외를 다시 던져서 롤백을 유도해야함.
@@ -173,7 +173,7 @@ public class ParticipationEventConsumer {
                     event.getKafkaPartition(), event.getKafkaOffset()
             );
             processingLogService.info(logMessage);
-            log.info("📊 " + logMessage);
+            log.info(logMessage);
         }
     }
 
@@ -191,9 +191,9 @@ public class ParticipationEventConsumer {
 
             String dlqPayload = jsonMapper.writeValueAsString(dlqMessage);
             kafkaTemplate.send(DLQ_TOPIC, dlqPayload);
-            log.info("📤 DLQ 전송 완료 - 사유: {}, 토픽: {}", errorReason, DLQ_TOPIC);
+            log.info("DLQ 전송 완료 - 사유: {}, 토픽: {}", errorReason, DLQ_TOPIC);
         } catch (Exception e) {
-            log.error("🚨 CRITICAL: DLQ 전송 실패! 원본 메시지: {}", originalMessage, e);
+            log.error("CRITICAL: DLQ 전송 실패! 원본 메시지: {}", originalMessage, e);
         }
     }
 
@@ -216,9 +216,9 @@ public class ParticipationEventConsumer {
 
             String dlqPayload = jsonMapper.writeValueAsString(dlqMessage);
             kafkaTemplate.send(DLQ_TOPIC, dlqPayload);
-            log.info("📤 배치 DLQ 전송 완료 - 사유: {}, 토픽: {}", errorReason, DLQ_TOPIC);
+            log.info("배치 DLQ 전송 완료 - 사유: {}, 토픽: {}", errorReason, DLQ_TOPIC);
         } catch (Exception e) {
-            log.error("🚨 CRITICAL: 배치 DLQ 전송 실패! 전체 메시지를 개별적으로 로깅합니다.", e);
+            log.error("CRITICAL: 배치 DLQ 전송 실패! 전체 메시지를 개별적으로 로깅합니다.", e);
             for (String msg : originalMessages) {
                 log.error("배치 DLQ 실패 개별 메시지: {}", msg);
             }
