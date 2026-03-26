@@ -380,17 +380,17 @@ k6 부하 테스트 도구를 사용했습니다.
 ![p3 실시간](https://github.com/user-attachments/assets/288c1055-dc14-44ec-b4b9-38d2d05642af)
 
 <br>
-<img width="500" height="633" alt="실시간 모니터링p3" src="https://github.com/user-attachments/assets/5818991d-d3e3-40cd-a16c-8ae61104032d" />
+<img width="500" height="633" alt="실시간 모니터링p3" src="https://github.com/user-attachments/assets/56b8f3a1-a980-48ac-8f19-0e1747c7d222" />
 <br>
 
 | 지표 | 값 |
 |------|-----|
-| 테스트 기간 | 173초 |
+| 테스트 기간 | 203초 |
 | 총 처리량 | 100,000건 |
-| 평균 TPS | 577.19 req/s |
-| 최고 TPS | **1,915.62 req/s** |
+| 평균 TPS | 492.70 req/s |
+| 최고 TPS | **1,182.11 req/s** |
 | 성공 | 100,000건 |
-| 실제 처리 TPS | 413.75 msg/s |
+| 실제 처리 TPS | 411.00 msg/s |
 
 ---
 
